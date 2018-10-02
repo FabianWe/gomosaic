@@ -134,5 +134,5 @@ func CosineSimilarity(p, q []float64) float64 {
 	}
 	lengthP = math.Sqrt(lengthP)
 	lengthQ = math.Sqrt(lengthQ)
-	return dotProduct / (lengthP * lengthQ)
+	return 1.0 - (dotProduct / (lengthP * lengthQ))
 }
