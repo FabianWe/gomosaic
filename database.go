@@ -177,6 +177,26 @@ func createFSMapperRecursive(root string, filter SupportedImageFunc) (*FSMapper,
 	return result, nil
 }
 
+// Gone returns images that are gone, i.e. images that are not registered
+// in the mapper.
+// This is useful for storages that store for example histograms. These storages
+// can test which images are gone ("missing") from the filesystem.
+//
+// The result contains all images from paths that are not registered in the
+// mapper.
+//
+// A storage can implement a "Mising" method by simply iterating over all
+// elements in the mapper and testing if it has an entry for that.
+func (m *FSMapper) Gone(paths []string) []string {
+	res := make([]string, 0)
+	for _, path := range paths {
+		if _, has := m.NameMapping[path]; !has {
+			res = append(res, path)
+		}
+	}
+	return res
+}
+
 // FSImageDB implements ImageStorage. It uses images stored on the filesystem
 // and opens them on demand.
 // Files are retrieved from a FSMapper.
