@@ -19,9 +19,31 @@ import (
 	"image"
 	"image/color"
 	"reflect"
+	"strings"
 
 	"github.com/nfnt/resize"
 )
+
+// SupportedImageFunc is a function that takes a file extension and decides if
+// this file extension is supported. Usually our library should support jpg
+// and png files, but this may change depending on what image protocols are
+// loaded.
+//
+// The extension passed to this function could be for example ".txt" or ".jpg".
+// JPGAndPNG is an implementation accepting jpg and png files.
+type SupportedImageFunc func(ext string) bool
+
+// JPGAndPNG is an implementation of SupportedImageFunc accepting jpg and png
+// file extensions.
+func JPGAndPNG(ext string) bool {
+	ext = strings.ToLower(ext)
+	switch ext {
+	case ".jpg", ".jpeg", ".png":
+		return true
+	default:
+		return false
+	}
+}
 
 const (
 	// QuantizeFactor is used during quantiation, it's the number of values in
