@@ -195,3 +195,14 @@ type ImageStorage interface {
 	// LoadConfig loads the config of the image with the given id.
 	LoadConfig(id ImageID) (image.Config, error)
 }
+
+// IDList returns the list [0, 1, ..., storage.NumImages - 1].
+func IDList(storage ImageStorage) []ImageID {
+	numImages := storage.NumImages()
+	res := make([]ImageID, numImages)
+	var i ImageID
+	for ; i < numImages; i++ {
+		res[i] = i
+	}
+	return res
+}

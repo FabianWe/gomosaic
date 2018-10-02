@@ -164,28 +164,38 @@ func (h *Histogram) Normalize(pixels int) *Histogram {
 	return res
 }
 
-// CreateHistograms creates histograms for all images in the given storage.
+// CreateHistograms creates histograms for all images in the ids list and loads
+// the images through the given storage.
+// If you want to create all histograms for a given storage you can use
+// CreateAllHistograms as a shortcut.
 // It runs the creation of histograms concurrently (how many go routines run
 // concurrently can be controlled by numRoutines).
 // k is the number of sub-divisons as described in the histogram type,
 // If normalized is true the normalized histograms are computed.
 // progress is a function that is called to inform about the progress,
 // see doucmentation for ProgressFunc.
-func CreateHistograms(storage ImageStorage, normalize bool, k uint, numRoutines int, progress ProgressFunc) ([]*Histogram, error) {
+func CreateHistograms(ids []ImageID, storage ImageStorage, normalize bool, k uint, numRoutines int, progress ProgressFunc) ([]*Histogram, error) {
 	if numRoutines <= 0 {
 		numRoutines = 1
 	}
-	numImages := storage.NumImages()
+	numImages := len(ids)
 	// any error that occurs sets this variable (first error)
 	// this is done later
 	var err error
+
+	// struct that we use for the channel
+	type job struct {
+		pos int
+		id  ImageID
+	}
+
 	res := make([]*Histogram, numImages)
-	jobs := make(chan ImageID, 1000)
+	jobs := make(chan job, 1000)
 	errorChan := make(chan error, 1000)
 	for w := 0; w < numRoutines; w++ {
-		go func(worker int) {
+		go func() {
 			for next := range jobs {
-				image, imageErr := storage.LoadImage(next)
+				image, imageErr := storage.LoadImage(next.id)
 				if imageErr != nil {
 					errorChan <- imageErr
 					continue
@@ -198,22 +208,21 @@ func CreateHistograms(storage ImageStorage, normalize bool, k uint, numRoutines 
 						hist = hist.Normalize(size)
 					}
 				}
-				res[next] = hist
+				res[next.pos] = hist
 				errorChan <- nil
 			}
-		}(w)
+		}()
 	}
 
 	go func() {
-		var job ImageID
-		for ; job < numImages; job++ {
-			jobs <- job
+
+		for i, id := range ids {
+			jobs <- job{pos: i, id: id}
 		}
 		close(jobs)
 	}()
 
-	var i ImageID
-	for ; i < numImages; i++ {
+	for i := 0; i < numImages; i++ {
 		nextErr := <-errorChan
 		if nextErr != nil && err == nil {
 			err = nextErr
@@ -225,7 +234,13 @@ func CreateHistograms(storage ImageStorage, normalize bool, k uint, numRoutines 
 	return res, err
 }
 
-// CreateHistogramsSequential works as CreateHistograms but does not use
+// CreateAllHistograms creates all histograms for images in the storage.
+// It is a shortcut using CreateHistograms, see this documentation for details.
+func CreateAllHistograms(storage ImageStorage, normalize bool, k uint, numRoutines int, progress ProgressFunc) ([]*Histogram, error) {
+	return CreateHistograms(IDList(storage), storage, normalize, k, numRoutines, progress)
+}
+
+// CreateHistogramsSequential works as CreateAllHistograms but does not use
 // concurrency.
 func CreateHistogramsSequential(storage ImageStorage, normalize bool, k uint, progress ProgressFunc) ([]*Histogram, error) {
 	numImages := storage.NumImages()

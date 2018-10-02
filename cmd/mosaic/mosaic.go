@@ -33,7 +33,7 @@ func init() {
 
 func main() {
 
-	mapper, mapperErr := gomosaic.CreateFSMapper("/home/fabian/Pictures/mosaic", false, nil)
+	mapper, mapperErr := gomosaic.CreateFSMapper("/home/fabian/Pictures/test", false, nil)
 	if mapperErr != nil {
 		log.Fatal(mapperErr)
 	}
@@ -50,7 +50,7 @@ func main() {
 
 	fmt.Printf("Creating histograms for %d images concurrently\n", storage.NumImages())
 	start = time.Now()
-	histogramsConc, histErr := gomosaic.CreateHistograms(storage, true, 8, 8, progress)
+	histogramsConc, histErr := gomosaic.CreateAllHistograms(storage, true, 8, 8, progress)
 	if histErr != nil {
 		log.Fatal(histErr)
 	}
