@@ -17,6 +17,7 @@ package gomosaic
 import (
 	"fmt"
 	"image"
+	"math"
 	"strings"
 )
 
@@ -74,6 +75,21 @@ func (h *Histogram) PrintInfo(verbose bool) {
 	} else {
 		fmt.Println(h)
 	}
+}
+
+// Equals  checks if two histograms are equal. epsilon is the difference
+// between that is allowed to still consider them equal.
+func (h *Histogram) Equals(other *Histogram, epsilon float64) bool {
+	if h.K != other.K {
+		return false
+	}
+	for i, e1 := range h.Entries {
+		e2 := other.Entries[i]
+		if math.Abs(e1-e2) > epsilon {
+			return false
+		}
+	}
+	return true
 }
 
 // Add creates the histogram given an image, that is it counts how often
@@ -146,4 +162,92 @@ func (h *Histogram) Normalize(pixels int) *Histogram {
 		res.Entries[i] = entry / size
 	}
 	return res
+}
+
+// CreateHistograms creates histograms for all images in the given storage.
+// It runs the creation of histograms concurrently (how many go routines run
+// concurrently can be controlled by numRoutines).
+// k is the number of sub-divisons as described in the histogram type,
+// If normalized is true the normalized histograms are computed.
+// progress is a function that is called to inform about the progress,
+// see doucmentation for ProgressFunc.
+func CreateHistograms(storage ImageStorage, normalize bool, k uint, numRoutines int, progress ProgressFunc) ([]*Histogram, error) {
+	if numRoutines <= 0 {
+		numRoutines = 1
+	}
+	numImages := storage.NumImages()
+	// any error that occurs sets this variable (first error)
+	// this is done later
+	var err error
+	res := make([]*Histogram, numImages)
+	jobs := make(chan ImageID, 1000)
+	errorChan := make(chan error, 1000)
+	for w := 0; w < numRoutines; w++ {
+		go func(worker int) {
+			for next := range jobs {
+				image, imageErr := storage.LoadImage(next)
+				if imageErr != nil {
+					errorChan <- imageErr
+					continue
+				}
+				hist := GenHistogram(image, k)
+				if normalize {
+					bounds := image.Bounds()
+					if !bounds.Empty() {
+						size := bounds.Dx() * bounds.Dy()
+						hist = hist.Normalize(size)
+					}
+				}
+				res[next] = hist
+				errorChan <- nil
+			}
+		}(w)
+	}
+
+	go func() {
+		var job ImageID
+		for ; job < numImages; job++ {
+			jobs <- job
+		}
+		close(jobs)
+	}()
+
+	var i ImageID
+	for ; i < numImages; i++ {
+		nextErr := <-errorChan
+		if nextErr != nil && err == nil {
+			err = nextErr
+		}
+		if progress != nil {
+			progress(int(i))
+		}
+	}
+	return res, err
+}
+
+// CreateHistogramsSequential works as CreateHistograms but does not use
+// concurrency.
+func CreateHistogramsSequential(storage ImageStorage, normalize bool, k uint, progress ProgressFunc) ([]*Histogram, error) {
+	numImages := storage.NumImages()
+	res := make([]*Histogram, numImages)
+	var i ImageID
+	for ; i < numImages; i++ {
+		image, imageErr := storage.LoadImage(i)
+		if imageErr != nil {
+			return nil, imageErr
+		}
+		hist := GenHistogram(image, k)
+		if normalize {
+			bounds := image.Bounds()
+			if !bounds.Empty() {
+				size := bounds.Dx() * bounds.Dy()
+				hist = hist.Normalize(size)
+			}
+		}
+		res[i] = hist
+		if progress != nil {
+			progress(int(i))
+		}
+	}
+	return res, nil
 }

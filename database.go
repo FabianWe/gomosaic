@@ -244,3 +244,28 @@ func (db FSImageDB) LoadConfig(id ImageID) (image.Config, error) {
 	config, _, decodeErr := image.DecodeConfig(r)
 	return config, decodeErr
 }
+
+// HistogramFSEntry is used to store a histogram on the filesystem.
+// It contains the path of the image the histogram was created for as well
+// as the histogram data.
+type HistogramFSEntry struct {
+	Path      string
+	Histogram *Histogram
+}
+
+type HistogramFSController struct {
+	Entries []HistogramFSEntry
+}
+
+// MemoryHistStorage implements HistogramStorage by keeping a list of histograms
+// in memory.
+type MemoryHistStorage struct {
+	Histograms []*Histogram
+}
+
+func NewMemoryHistStorage(capacity int) MemoryHistStorage {
+	if capacity < 0 {
+		capacity = 0
+	}
+	return MemoryHistStorage{make([]*Histogram, 0, capacity)}
+}

@@ -18,10 +18,53 @@ import (
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
-	// "flag" // for handling more complicated command line arguments use flag
+	"time"
+	// Since we're not in the gomosaic package we have to import it
+	"github.com/FabianWe/gomosaic"
+
+	log "github.com/sirupsen/logrus"
 )
 
+func init() {
+	if gomosaic.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
+}
+
 func main() {
-	fmt.Println("Hello and welcome to the Go mosaic generator!")
-	fmt.Println("Hopefully someday something useful happens here!")
+
+	mapper, mapperErr := gomosaic.CreateFSMapper("/home/fabian/Pictures/mosaic", false, nil)
+	if mapperErr != nil {
+		log.Fatal(mapperErr)
+	}
+	storage := gomosaic.NewFSImageDB(mapper)
+	progress := gomosaic.LoggerProgressFunc("gen-hist", int(storage.NumImages()), 100)
+	fmt.Printf("Creating histograms for %d images\n", storage.NumImages())
+	start := time.Now()
+	histograms, histErr := gomosaic.CreateHistogramsSequential(storage, true, 8, progress)
+	if histErr != nil {
+		log.Fatal(histErr)
+	}
+	execTime := time.Since(start)
+	fmt.Printf("Computed %d histograms after %v\n", len(histograms), execTime)
+
+	fmt.Printf("Creating histograms for %d images concurrently\n", storage.NumImages())
+	start = time.Now()
+	histogramsConc, histErr := gomosaic.CreateHistograms(storage, true, 8, 8, progress)
+	if histErr != nil {
+		log.Fatal(histErr)
+	}
+	execTime = time.Since(start)
+	fmt.Printf("Computed %d histograms after %v\n", len(histogramsConc), execTime)
+
+	if len(histograms) != len(histogramsConc) {
+		log.Fatal("Weird, histograms not of same length")
+	}
+	for i, h := range histograms {
+		other := histogramsConc[i]
+		if !h.Equals(other, 0.01) {
+			log.Fatal("Not equal...")
+		}
+	}
+	log.Println("DONE")
 }
