@@ -16,6 +16,7 @@ package gomosaic
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"image"
 	"io/ioutil"
@@ -308,8 +309,30 @@ func (c *HistogramFSController) ReadGobFile(path string) error {
 	}
 	defer f.Close()
 	dec := gob.NewDecoder(f)
-	dec.Decode(c)
-	return nil
+	err = dec.Decode(c)
+	return err
+}
+
+func (c *HistogramFSController) WiteJsonFile(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	err = enc.Encode(c)
+	return err
+}
+
+func (c *HistogramFSController) ReadJsonFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	err = dec.Decode(c)
+	return err
 }
 
 // MemoryHistStorage implements HistogramStorage by keeping a list of histograms

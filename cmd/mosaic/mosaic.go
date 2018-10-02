@@ -82,5 +82,14 @@ func main() {
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
-	// fmt.Println(foo)
+	writeErr = fsController.WiteJsonFile(filepath.Join(path, "hists.json"))
+	if writeErr != nil {
+		log.Fatal(writeErr)
+	}
+	bar := &gomosaic.HistogramFSController{}
+	readErr = bar.ReadJsonFile(filepath.Join(path, "hists.json"))
+	if readErr != nil {
+		log.Fatal(readErr)
+	}
+	fmt.Println(bar)
 }
