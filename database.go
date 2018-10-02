@@ -51,10 +51,13 @@ func NewFSMapper() *FSMapper {
 	}
 }
 
+// Len returns the number of images stored in the mapper.
 func (m *FSMapper) Len() int {
 	return len(m.IDMapping)
 }
 
+// NumImages returns the number of images in the mapper as an ImageID.
+// Values between 0 and NumImages - 1 are considered valid ids.
 func (m *FSMapper) NumImages() ImageID {
 	return ImageID(m.Len())
 }
