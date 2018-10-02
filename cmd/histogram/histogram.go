@@ -27,7 +27,15 @@ import (
 
 	// Since we're not in the gomosaic package we have to import it
 	"github.com/FabianWe/gomosaic"
+
+	log "github.com/sirupsen/logrus"
 )
+
+func init() {
+	if gomosaic.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
+}
 
 func main() {
 	if len(os.Args) < 2 {

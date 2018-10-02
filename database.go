@@ -20,87 +20,149 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	log "github.com/sirupsen/logrus"
 )
 
-// FSImageDB implements ImageStorage. It uses images stored on the filesystem
-// and opens them on demand.
-// The paths are stored relative to a Root directory, thus to get the
-// absolute path to an image... TODO
-type FSImageDB struct {
-	Root  string
-	Paths []string
+// FSMapper is a mapping between filesystem images and internal ids.
+// It maps both, ids to images and images to ids, implementing a bijective
+// mapping.
+//
+// A problem arises when we store for example histograms. Images may be deleted
+// or new images added, thus the histograms stored (e.g. in an array) can't be
+// directly used.
+//
+// FSMapper provides methods to keep such things synched.
+//
+// A mapper maps absolute paths to image ids (and vice versa). Meaning that
+// the mapping can't just be transferred to another machine.
+type FSMapper struct {
+	NameMapping map[string]ImageID
+	IDMapping   []string
 }
 
-func (db *FSImageDB) GetPath(id ImageID) string {
-	return filepath.Join(db.Root, db.Paths[id])
-}
-
-func NewFSImageDB(root string) *FSImageDB {
-	return &FSImageDB{Root: root, Paths: nil}
-}
-
-func (db *FSImageDB) NumImages() ImageID {
-	return ImageID(len(db.Paths))
-}
-
-func (db FSImageDB) LoadImage(id ImageID) (image.Image, error) {
-	if id >= db.NumImages() {
-		return nil, fmt.Errorf("Invalid image id: Not associated with an image %d", id)
+// NewFSMapper creates a new mapper without any values (empty mappings).
+// To create a mapper with content (i.e. reading a list of files from the
+// filesystem) use CreateFSMapper.
+func NewFSMapper() *FSMapper {
+	return &FSMapper{
+		NameMapping: make(map[string]ImageID),
+		IDMapping:   nil,
 	}
-	// open file
-	file := db.GetPath(id)
-	r, openErr := os.Open(file)
-	if openErr != nil {
-		return nil, openErr
-	}
-	defer r.Close()
-	img, _, decodeErr := image.Decode(r)
-	return img, decodeErr
 }
 
-func (db FSImageDB) LoadConfig(id ImageID) (image.Config, error) {
-	if id >= db.NumImages() {
-		return image.Config{}, fmt.Errorf("Invalid image id: Not associated with an image %d", id)
-	}
-	// open
-	file := db.GetPath(id)
-	r, openErr := os.Open(file)
-	if openErr != nil {
-		return image.Config{}, openErr
-	}
-	defer r.Close()
-	config, _, decodeErr := image.DecodeConfig(r)
-	return config, decodeErr
+func (m *FSMapper) Len() int {
+	return len(m.IDMapping)
 }
 
-// TODO deal with recursive
-func GenFSDatabase(root string, recursive bool, filter SupportedImageFunc) (*FSImageDB, error) {
-	root, absErr := filepath.Abs(root)
-	if absErr != nil {
-		return nil, absErr
+func (m *FSMapper) NumImages() ImageID {
+	return ImageID(m.Len())
+}
+
+// GetID returns the id of an absolute image path. If the image wasn't
+// registered the id will be invalid and the boolean false.
+func (m *FSMapper) GetID(path string) (ImageID, bool) {
+	// can't return the two value version directly
+	if id, has := m.NameMapping[path]; has {
+		return id, true
 	}
+	return -1, false
+}
+
+// GetPath returns the absolute path of the image with the given id. If no image
+// with that id exists the returned path is the empty string and the boolean
+// false.
+func (m *FSMapper) GetPath(id ImageID) (string, bool) {
+	if int(id) >= len(m.IDMapping) {
+		return "", false
+	}
+	return m.IDMapping[id], true
+}
+
+// Register registers an image to the mapping and returns the id of the image.
+// If an image with that path is already present in the storage the images will
+// not get added.
+//
+// path must be an absolute path to an image resource, this is however not
+// checked / enforced in Register. Ensure this before calling the function.
+// The returned value is the newly assigned ImageID; however if the image is
+// already present the second return value is false and the ImageID is not
+// valid. So only if the returned bool is true the ImageID may be used.
+//
+// Register adjusts both mappings and is not safe for concurrent use.
+func (m *FSMapper) Register(path string) (ImageID, bool) {
+	if Debug {
+		if !filepath.IsAbs(path) {
+			log.WithField("path", path).Warn("fsMapper.Register called with relative path")
+		}
+	}
+	_, exists := m.NameMapping[path]
+	if exists {
+		return -1, false
+	}
+	id := ImageID(len(m.IDMapping))
+	m.NameMapping[path] = id
+	m.IDMapping = append(m.IDMapping, path)
+	if Debug {
+		if len(m.IDMapping) != len(m.NameMapping) {
+			log.WithFields(log.Fields{
+				"idMappingLen":   len(m.IDMapping),
+				"nameMappingLen": len(m.NameMapping),
+			}).Warn("Invalid FSMapper state, no bijective mapping?")
+		}
+	}
+	return id, true
+}
+
+// CreateFSMapper creates an FSMapper containing images from the root directory.
+// All files for which filter returns true will be registered to the mapping.
+// If recursive is true also subdirectories of root will be scanned, otherwise
+// only root is scanned.
+//
+// The filter function can be nil and is then set to JPGAndPNG. Any error while
+// scanning the directory / the directories is returned together with nil.
+func CreateFSMapper(root string, recursive bool, filter SupportedImageFunc) (*FSMapper, error) {
 	if filter == nil {
 		filter = JPGAndPNG
 	}
-	if recursive {
-		return genFSDBRecursive(root, filter)
+	root, absErr := filepath.Abs(root)
+	switch {
+	case absErr != nil:
+		return nil, absErr
+	case recursive:
+		return createFSMapperRecursive(root, filter)
+	default:
+		return createFSMapperNonRecursive(root, filter)
 	}
-	return genFSDBNonRecursive(root, filter)
 }
 
-func genFSDBRecursive(root string, filter SupportedImageFunc) (*FSImageDB, error) {
-	result := NewFSImageDB(root)
-	walkFunc := func(path string, info os.FileInfo, err error) error {
+func createFSMapperNonRecursive(root string, filter SupportedImageFunc) (*FSMapper, error) {
+	result := NewFSMapper()
+	files, err := ioutil.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		if !file.IsDir() && filter(filepath.Ext(file.Name())) {
+			abs := filepath.Join(root, file.Name())
+			if _, success := result.Register(abs); !success {
+				log.WithField("path", abs).Info("Image already registered")
+			}
+		}
+	}
+	return result, nil
+}
 
+func createFSMapperRecursive(root string, filter SupportedImageFunc) (*FSMapper, error) {
+	result := NewFSMapper()
+	walkFunc := func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
 			return err
 		case !info.IsDir() && filter(filepath.Ext(path)):
-			rel, relErr := filepath.Rel(root, path)
-			if relErr != nil {
-				return relErr
+			if _, success := result.Register(path); !success {
+				log.WithField("path", path).Info("Image already registered")
 			}
-			result.Paths = append(result.Paths, rel)
 			return nil
 		default:
 			return nil
@@ -112,16 +174,50 @@ func genFSDBRecursive(root string, filter SupportedImageFunc) (*FSImageDB, error
 	return result, nil
 }
 
-func genFSDBNonRecursive(root string, filter SupportedImageFunc) (*FSImageDB, error) {
-	result := NewFSImageDB(root)
-	files, err := ioutil.ReadDir(root)
-	if err != nil {
-		return nil, err
+// FSImageDB implements ImageStorage. It uses images stored on the filesystem
+// and opens them on demand.
+// Files are retrieved from a FSMapper.
+type FSImageDB struct {
+	mapper *FSMapper
+}
+
+// NewFSImageDB returns a new data base given the filesystem mapper.
+func NewFSImageDB(mapper *FSMapper) *FSImageDB {
+	return &FSImageDB{mapper: mapper}
+}
+
+// NumImages returns the number of images in the database.
+func (db *FSImageDB) NumImages() ImageID {
+	return db.mapper.NumImages()
+}
+
+// LoadImage loads the image with the given id from the filesystem.
+func (db FSImageDB) LoadImage(id ImageID) (image.Image, error) {
+	file, hasFile := db.mapper.GetPath(id)
+	if !hasFile {
+		return nil, fmt.Errorf("Invalid image id: Not associated with an image %d", id)
 	}
-	for _, file := range files {
-		if !file.IsDir() && filter(filepath.Ext(file.Name())) {
-			result.Paths = append(result.Paths, file.Name())
-		}
+	r, openErr := os.Open(file)
+	if openErr != nil {
+		return nil, openErr
 	}
-	return result, nil
+	defer r.Close()
+	img, _, decodeErr := image.Decode(r)
+	return img, decodeErr
+}
+
+// LoadConfig loads the image configuration for the image with the given id from
+// the filesystem.
+func (db FSImageDB) LoadConfig(id ImageID) (image.Config, error) {
+	file, hasFile := db.mapper.GetPath(id)
+	if !hasFile {
+		return image.Config{}, fmt.Errorf("Invalid image id: Not associated with an image %d", id)
+	}
+	r, openErr := os.Open(file)
+	if openErr != nil {
+		return image.Config{}, openErr
+	}
+	defer r.Close()
+	config, _, decodeErr := image.DecodeConfig(r)
+	return config, decodeErr
 }

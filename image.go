@@ -24,6 +24,12 @@ import (
 	"github.com/nfnt/resize"
 )
 
+const (
+	// Debug is true if code should be compiled in debug mode, printing
+	// more stuff and performing checks.
+	Debug = true
+)
+
 // SupportedImageFunc is a function that takes a file extension and decides if
 // this file extension is supported. Usually our library should support jpg
 // and png files, but this may change depending on what image protocols are
@@ -165,7 +171,7 @@ func (resizer NfntResizer) Resize(width, height uint, img image.Image) image.Ima
 }
 
 // ImageID is used to unambiguously identify an image.
-type ImageID uint
+type ImageID int
 
 // ImageStorage is used to administrate a collection or database of images.
 // Images are not stored in memory but are identified by an id and can be loaded
