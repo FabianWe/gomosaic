@@ -68,7 +68,7 @@ func main() {
 		}
 	}
 	// TODO not the nicest way to use it
-	histStorage := &gomosaic.MemoryHistStorage{Histograms: histogramsConc, K: 8}
+	histStorage := &gomosaic.MemoryHistStorage{Histograms: histogramsConc}
 	fsController, controllerErr := gomosaic.CreateHistFSController(gomosaic.IDList(storage), mapper, histStorage)
 	if controllerErr != nil {
 		log.Fatal(controllerErr)
@@ -82,14 +82,14 @@ func main() {
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
-	writeErr = fsController.WiteJsonFile(filepath.Join(path, "hists.json"))
+	writeErr = fsController.WiteJSONFile(filepath.Join(path, "hists.json"))
 	if writeErr != nil {
 		log.Fatal(writeErr)
 	}
 	bar := &gomosaic.HistogramFSController{}
-	readErr = bar.ReadJsonFile(filepath.Join(path, "hists.json"))
+	readErr = bar.ReadJSONFile(filepath.Join(path, "hists.json"))
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
-	fmt.Println(bar)
+	// fmt.Println(bar)
 }

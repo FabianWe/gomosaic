@@ -17,11 +17,13 @@ package gomosaic
 import (
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -259,6 +261,7 @@ type HistogramFSEntry struct {
 // HistogramFSEntry) on the filesystem.
 type HistogramFSController struct {
 	Entries []HistogramFSEntry
+	K       uint
 }
 
 // NewHistogramFSController creates an empty file system controller with the
@@ -266,13 +269,21 @@ type HistogramFSController struct {
 //
 // To create a new file system controller initialized with some content use
 // CreateHistFSController.
-func NewHistogramFSController(capacity int) *HistogramFSController {
+func NewHistogramFSController(capacity int, k uint) *HistogramFSController {
 	if capacity < 0 {
 		capacity = 100
 	}
-	return &HistogramFSController{Entries: make([]HistogramFSEntry, 0, capacity)}
+	return &HistogramFSController{Entries: make([]HistogramFSEntry, 0, capacity), K: k}
 }
 
+// CreateHistFSController creates a histogram filesystem controller given
+// some input data.
+// ids is the list of all image ids to be included in the controler, mapper
+// is used to get the absolute path of an image (stored alongside the histogram
+// data) and the storage is used to lookup the histograms.
+//
+// If you want to create a fs controller with all ids from a storage you can use
+// IDList to create a list of all ids.
 func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramStorage) (*HistogramFSController, error) {
 	res := &HistogramFSController{Entries: make([]HistogramFSEntry, len(ids))}
 	for i, id := range ids {
@@ -291,6 +302,7 @@ func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramSt
 	return res, nil
 }
 
+// WriteGobFile writes the histograms to a file encoded gob format.
 func (c *HistogramFSController) WriteGobFile(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -302,6 +314,8 @@ func (c *HistogramFSController) WriteGobFile(path string) error {
 	return err
 }
 
+// ReadGobFile reads the content of the controller from the specified file.
+// The file must be encoded in gob.
 func (c *HistogramFSController) ReadGobFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -313,7 +327,8 @@ func (c *HistogramFSController) ReadGobFile(path string) error {
 	return err
 }
 
-func (c *HistogramFSController) WiteJsonFile(path string) error {
+// WiteJSONFile writes the histograms to  a file encoded in json format.
+func (c *HistogramFSController) WiteJSONFile(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -324,7 +339,9 @@ func (c *HistogramFSController) WiteJsonFile(path string) error {
 	return err
 }
 
-func (c *HistogramFSController) ReadJsonFile(path string) error {
+// ReadJSONFile reads the content of the controller from the specified file.
+// The file must be encoded in json.
+func (c *HistogramFSController) ReadJSONFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -335,18 +352,79 @@ func (c *HistogramFSController) ReadJsonFile(path string) error {
 	return err
 }
 
+// CheckData is used to verify (parts) of the controller data. It tests if
+// the controller is defined for the same k as the argument k (tested only if
+// checK is true). If you don't want to check k just set checK to false and k
+// to some arbitrary value. It also checks if each histogram in the controler
+// is defined for the same k (the k defined in the controller). If
+// checkNormalized is set it also checks if each histogram only contains values
+// between 0 and 1.
+//
+// This method should not be used in production code because it's rather slow,
+// but it's useful for debugging.
+//
+// If the returned error is nil the check passed, otherwise an error != nil is
+// returned describing all failed tests.
+//
+// Usually we deal with incorrectly stored files during mosaic generation:
+// If there is an error with one of the histogram ojbects (wrong k) the
+// metrics return an error. If somehow not-normalized histograms are stored
+// the error is not detected, it should just lead to weird results.
+func (c *HistogramFSController) CheckData(k uint, checkK bool, checkNormalized bool) error {
+	errs := make([]string, 0)
+	if checkK && c.K != k {
+		errs = append(errs, fmt.Sprintf("Controller stores entries with k = %d, expected k = %d", c.K, k))
+	}
+	for _, entry := range c.Entries {
+		histK := entry.Histogram.K
+		if c.K != histK {
+			errs = append(errs, fmt.Sprintf("Error in histogram for %s: Expected histogram with k = %d, got k = %d", entry.Path, c.K, histK))
+		}
+		histEntries := entry.Histogram.Entries
+		if uint(len(histEntries)) != (histK * histK * histK) {
+			errs = append(errs, fmt.Sprintf("Error in histogram for %s: Expected histogram of size %d, got size %d", entry.Path, (histK*histK*histK), len(histEntries)))
+		}
+		if checkNormalized {
+			for _, value := range histEntries {
+				if value < 0.0 || value > 1.0 {
+					errs = append(errs, fmt.Sprintf("Error in histogram for %s: Found histogram entry %.2f", entry.Path, value))
+				}
+			}
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(errs, "\n"))
+}
+
+// GCHFileName returns the proposed filename for a file containing global
+// color histograms.
+// When saving HistogramFSController instances (that's the type used for storing
+// GCHs) the file should be saved by this file name.
+// The scheme is "gch-k.(gob|json)".
+// k is the value as defined in histogram and ext is the extension (gob for
+// gob encoded files and json for json encoded files).
+//
+// For example histograms with 8 sub-divions encoded as json would be stored in
+// a file "gch-8.json".
+//
+// Using this scheme makes it easier to find the precomputed data.
+func GCHFileName(k uint, ext string) string {
+	return fmt.Sprintf("gch-%d.%s", k, ext)
+}
+
 // MemoryHistStorage implements HistogramStorage by keeping a list of histograms
 // in memory.
 type MemoryHistStorage struct {
 	Histograms []*Histogram
-	K          uint
 }
 
 func NewMemoryHistStorage(k uint, capacity int) *MemoryHistStorage {
 	if capacity < 0 {
 		capacity = 100
 	}
-	return &MemoryHistStorage{Histograms: make([]*Histogram, 0, capacity), K: k}
+	return &MemoryHistStorage{Histograms: make([]*Histogram, 0, capacity)}
 }
 
 func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
