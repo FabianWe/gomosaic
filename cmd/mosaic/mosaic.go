@@ -18,6 +18,7 @@ import (
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
+	"path/filepath"
 	"time"
 	// Since we're not in the gomosaic package we have to import it
 	"github.com/FabianWe/gomosaic"
@@ -32,8 +33,8 @@ func init() {
 }
 
 func main() {
-
-	mapper, mapperErr := gomosaic.CreateFSMapper("/home/fabian/Pictures/test", false, nil)
+	path := "/home/fabian/Pictures/test"
+	mapper, mapperErr := gomosaic.CreateFSMapper(path, true, nil)
 	if mapperErr != nil {
 		log.Fatal(mapperErr)
 	}
@@ -66,5 +67,20 @@ func main() {
 			log.Fatal("Not equal...")
 		}
 	}
-	log.Println("DONE")
+	// TODO not the nicest way to use it
+	histStorage := &gomosaic.MemoryHistStorage{Histograms: histogramsConc, K: 8}
+	fsController, controllerErr := gomosaic.CreateHistFSController(gomosaic.IDList(storage), mapper, histStorage)
+	if controllerErr != nil {
+		log.Fatal(controllerErr)
+	}
+	writeErr := fsController.WriteGobFile(filepath.Join(path, "hists.gob"))
+	if writeErr != nil {
+		log.Fatal(writeErr)
+	}
+	foo := &gomosaic.HistogramFSController{}
+	readErr := foo.ReadGobFile(filepath.Join(path, "hists.gob"))
+	if readErr != nil {
+		log.Fatal(readErr)
+	}
+	// fmt.Println(foo)
 }

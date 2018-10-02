@@ -15,6 +15,7 @@
 package gomosaic
 
 import (
+	"encoding/gob"
 	"fmt"
 	"image"
 	"io/ioutil"
@@ -253,19 +254,81 @@ type HistogramFSEntry struct {
 	Histogram *Histogram
 }
 
+// HistogramFSController is used to store histograms (wrapped by
+// HistogramFSEntry) on the filesystem.
 type HistogramFSController struct {
 	Entries []HistogramFSEntry
+}
+
+// NewHistogramFSController creates an empty file system controller with the
+// given capacity.
+//
+// To create a new file system controller initialized with some content use
+// CreateHistFSController.
+func NewHistogramFSController(capacity int) *HistogramFSController {
+	if capacity < 0 {
+		capacity = 100
+	}
+	return &HistogramFSController{Entries: make([]HistogramFSEntry, 0, capacity)}
+}
+
+func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramStorage) (*HistogramFSController, error) {
+	res := &HistogramFSController{Entries: make([]HistogramFSEntry, len(ids))}
+	for i, id := range ids {
+		// lookup file name
+		path, ok := mapper.GetPath(id)
+		if !ok {
+			return nil, fmt.Errorf("Can't retrieve path for image with id %d", id)
+		}
+		// lookup histogram
+		hist, histErr := storage.GetHistogram(id)
+		if histErr != nil {
+			return nil, histErr
+		}
+		res.Entries[i] = HistogramFSEntry{Path: path, Histogram: hist}
+	}
+	return res, nil
+}
+
+func (c *HistogramFSController) WriteGobFile(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	err = enc.Encode(c)
+	return err
+}
+
+func (c *HistogramFSController) ReadGobFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := gob.NewDecoder(f)
+	dec.Decode(c)
+	return nil
 }
 
 // MemoryHistStorage implements HistogramStorage by keeping a list of histograms
 // in memory.
 type MemoryHistStorage struct {
 	Histograms []*Histogram
+	K          uint
 }
 
-func NewMemoryHistStorage(capacity int) MemoryHistStorage {
+func NewMemoryHistStorage(k uint, capacity int) *MemoryHistStorage {
 	if capacity < 0 {
-		capacity = 0
+		capacity = 100
 	}
-	return MemoryHistStorage{make([]*Histogram, 0, capacity)}
+	return &MemoryHistStorage{Histograms: make([]*Histogram, 0, capacity), K: k}
+}
+
+func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
+	if int(id) >= len(s.Histograms) {
+		return nil, fmt.Errorf("Histogram for id %d not registered", id)
+	}
+	return s.Histograms[id], nil
 }
