@@ -14,7 +14,10 @@
 
 package gomosaic
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // ImageMetric is any function that can compare two images (given by their id).
 // Usually they should not load images into memory, but if it is required they
@@ -64,4 +67,72 @@ func HistogramImageMetric(m HistogramMetric, storage HistogramStorage) ImageMetr
 		}
 		return m(hA, hB), nil
 	}
+}
+
+// VectorMetric is a function that takes two vectors of the same length and
+// returns a metric value ("distance") of the two.
+//
+// Vector metrics therefor can be used for comparing histograms.
+type VectorMetric func(p, q []float64) float64
+
+// HistogramVectorMetric converts a vector metric to a histogram metric.
+// With HistogramImageMetric a vector metric can be converted to an image
+// metric.
+func HistogramVectorMetric(vm VectorMetric) HistogramMetric {
+	return func(hA, hB *Histogram) float64 {
+		return vm(hA.Entries, hB.Entries)
+	}
+}
+
+// Manhattan returns the manhattan distance of two vectors, that is
+// |p1 - q1| + ... + |pn - qn|.
+func Manhattan(p, q []float64) float64 {
+	var result float64
+	for i, e1 := range p {
+		result += math.Abs(e1 - q[i])
+	}
+	return result
+}
+
+// Euclidean returns the euclidean distance of two vectors, that is
+// sqrt( (p1 - q1)² + ... + (pn - qn)² ).
+func Euclidean(p, q []float64) float64 {
+	var sum float64
+	for i, e1 := range p {
+		e2 := q[i]
+		diff := (e1 - e2)
+		sum += (diff * diff)
+	}
+	return math.Sqrt(sum)
+}
+
+// MinDistance returns 1 - ( min(p1, q1) + ... + min(pn, qn) ).
+func MinDistance(p, q []float64) float64 {
+	var sum float64
+	for i, e1 := range p {
+		e2 := q[i]
+		sum += math.Min(e1, e2)
+	}
+	return 1.0 - sum
+}
+
+// CosineSimilarity returns 1 - cos(∡(p, q)). The result is between 0 and 2,
+// as special case is that the length of p or q is 0, in this case the result
+// is 2.1
+func CosineSimilarity(p, q []float64) float64 {
+	var dotProduct, lengthP, lengthQ float64
+	for i, e1 := range p {
+		e2 := q[i]
+		dotProduct += (e1 * e2)
+		lengthP += (e1 * e1)
+		lengthQ += (e2 * e2)
+	}
+	if lengthP == 0.0 || lengthQ == 0.0 {
+		// special case if a vector should be "empty", in this case we return
+		// a big distance for this metric (max value should be 2)
+		return 2.1
+	}
+	lengthP = math.Sqrt(lengthP)
+	lengthQ = math.Sqrt(lengthQ)
+	return dotProduct / (lengthP * lengthQ)
 }
