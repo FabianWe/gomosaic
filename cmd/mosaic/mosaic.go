@@ -16,8 +16,10 @@ package main
 
 import (
 	"fmt"
+	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"os"
 	"path/filepath"
 	"time"
 	// Since we're not in the gomosaic package we have to import it
@@ -68,7 +70,7 @@ func main() {
 		}
 	}
 	// TODO not the nicest way to use it
-	histStorage := &gomosaic.MemoryHistStorage{Histograms: histogramsConc}
+	histStorage := &gomosaic.MemoryHistStorage{Histograms: histogramsConc, K: 8}
 	fsController, controllerErr := gomosaic.CreateHistFSController(gomosaic.IDList(storage), mapper, histStorage)
 	if controllerErr != nil {
 		log.Fatal(controllerErr)
@@ -91,4 +93,39 @@ func main() {
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
+
+	if len(os.Args) < 2 {
+		fmt.Println("Usage:", os.Args[0], "<IMAGE>")
+		os.Exit(1)
+	}
+	r, openErr := os.Open(os.Args[1])
+	if openErr != nil {
+		fmt.Println("Can't open file:")
+		fmt.Println(openErr)
+		os.Exit(1)
+	}
+	defer r.Close()
+	img, _, decodeErr := image.Decode(r)
+	if decodeErr != nil {
+		fmt.Println("Error parsing image:")
+		fmt.Println(decodeErr)
+		os.Exit(1)
+	}
+
+	hMetric, _ := gomosaic.GetHistogramMetric("cosine")
+
+	fmt.Println("Composing mosaic")
+	start = time.Now()
+	selector := gomosaic.GCHSelector(histStorage, hMetric, 8)
+	selector.Init(storage)
+	div := gomosaic.NewFixedNumDivider(20, 30, false)
+	dist := div.Divide(img)
+	comp, compseErr := selector.SelectImages(storage, img, dist)
+	execTime = time.Since(start)
+	if compseErr != nil {
+		log.Fatal(compseErr)
+	}
+	fmt.Println("Done after", execTime)
+	fmt.Println("Composed:")
+	fmt.Println(comp)
 }
