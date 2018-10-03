@@ -18,6 +18,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	// Debug is true if code should be compiled in debug mode, printing
+	// more stuff and performing checks.
+	Debug = true
+)
+
 // ProgressFunc is a function that is used to inform a caller about the progress
 // of a called function.
 // For example if we process thousands of images we might wish to know

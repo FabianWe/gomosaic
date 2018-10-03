@@ -24,12 +24,6 @@ import (
 	"github.com/nfnt/resize"
 )
 
-const (
-	// Debug is true if code should be compiled in debug mode, printing
-	// more stuff and performing checks.
-	Debug = true
-)
-
 // SupportedImageFunc is a function that takes a file extension and decides if
 // this file extension is supported. Usually our library should support jpg
 // and png files, but this may change depending on what image protocols are
