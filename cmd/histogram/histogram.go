@@ -76,6 +76,17 @@ func main() {
 	}
 	fmt.Println("Done after", execTime)
 
+	scheme := gomosaic.NewFourLCHScheme()
+	lch, lchErr := scheme.ComputLCH(img, 8)
+	if lchErr != nil {
+		log.Fatal(lchErr)
+	}
+	fmt.Printf("LCH consisting of %d parts\n", len(lch.Histograms))
+	fmt.Println("Sums:")
+	for i, gch := range lch.Histograms {
+		fmt.Printf("Sum of %d: %.2f\n", i, gch.EntrySum())
+	}
+
 	// div := gomosaic.NewFixedNumDivider(20, 30, false)
 	// distribution := div.Divide(img)
 	//

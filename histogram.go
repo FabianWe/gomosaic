@@ -106,6 +106,11 @@ func (h *Histogram) Equals(other *Histogram, epsilon float64) bool {
 func (h *Histogram) Add(img image.Image, k uint) {
 	bounds := img.Bounds()
 
+	// don't do anything for empty images
+	if bounds.Empty() {
+		return
+	}
+
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			// get generic color
@@ -127,6 +132,28 @@ func (h *Histogram) Add(img image.Image, k uint) {
 func GenHistogram(img image.Image, k uint) *Histogram {
 	res := NewHistogram(k)
 	res.Add(img, k)
+	return res
+}
+
+// GenHistogramFromList generates a histogram containing an entry for each image
+// in the images list.
+// k is the number of sub-divisons. If normalize is true the normalized
+// histogram will be computed instead of the frequency histogram.
+func GenHistogramFromList(k uint, normalize bool, images ...image.Image) *Histogram {
+	res := NewHistogram(k)
+	// we add the size of all images from the list to improve normalization
+	size := 0
+	for _, img := range images {
+		bounds := img.Bounds()
+		if bounds.Empty() {
+			continue
+		}
+		res.Add(img, k)
+		size += (bounds.Dx() * bounds.Dy())
+	}
+	if normalize {
+		res = res.Normalize(size)
+	}
 	return res
 }
 
