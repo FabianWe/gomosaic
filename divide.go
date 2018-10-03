@@ -222,6 +222,10 @@ func (divider *FixedNumDivider) Divide(img image.Image) TileDivision {
 	return res
 }
 
+// DivideImage computes the actual tiles from an image and the distribution
+// into tile rectangles.
+// The returned images should all be part of the image, thus must not have the
+// same size as suggested by the distribution.
 func DivideImage(img image.Image, distribution TileDivision, numRoutines int) (Tiles, error) {
 	if numRoutines <= 0 {
 		numRoutines = 1

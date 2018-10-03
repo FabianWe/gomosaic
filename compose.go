@@ -72,6 +72,7 @@ type ImageMetric interface {
 // Then for a query once InitTiles is called on the metric. In this step
 // information about the query image are computed, for example computing GCHs
 // of the query tiles. Then multiple calls to compare are made.
+// To get the actual tiles from an image and a distribution use DivideImage.
 //
 // A note for more sophisticated storage approaches: At the moment all metric
 // storages (for example histgram storage) have all the data fastly available
@@ -188,4 +189,82 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.
 
 	wg.Wait()
 	return result, nil
+}
+
+// InitStorage(storage ImageStorage) error
+// InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error
+// Compare(storage ImageStorage, image ImageID, tileY, tileX int) (float64, error)
+
+// TODO add synching between image storage and histogram storage
+type HistogramImageMetric struct {
+	HistStorage HistogramStorage
+	TileData    [][]*Histogram
+	K           uint
+	NumRoutines int
+}
+
+func NewHistogramImageMetric(storage HistogramStorage, numRoutines int) *HistogramImageMetric {
+	return &HistogramImageMetric{HistStorage: storage,
+		TileData:    nil,
+		K:           storage.Divisions(),
+		NumRoutines: numRoutines}
+}
+
+func (m *HistogramImageMetric) InitStorage(storage ImageStorage) error {
+	// probably some synching here?
+	return nil
+}
+
+func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error {
+	tiles, tilesErr := DivideImage(query, dist, m.NumRoutines)
+	if tilesErr != nil {
+		return tilesErr
+	}
+
+	// initialize tile data, compute number of tiles
+	numTiles := 0
+	m.TileData = make([][]*Histogram, len(tiles))
+	for i, col := range tiles {
+		size := len(col)
+		m.TileData[i] = make([]*Histogram, size)
+		numTiles += size
+	}
+
+	type job struct {
+		i, j int
+	}
+
+	// compute histograms for each tile
+	jobs := make(chan job, 1000)
+	done := make(chan bool, 1000)
+
+	for w := 0; w < m.NumRoutines; w++ {
+		go func() {
+			for next := range jobs {
+				tileImage := tiles[next.i][next.j]
+				m.TileData[next.i][next.j] = GenHistogram(tileImage, m.K)
+				// report done
+				done <- true
+			}
+		}()
+	}
+
+	// start jobs
+	go func() {
+		for i, col := range dist {
+			for j := range col {
+				jobs <- job{i, j}
+			}
+		}
+		close(jobs)
+	}()
+
+	// wait until done
+	for _, col := range dist {
+		for j := 0; j < len(col); j++ {
+			<-done
+		}
+	}
+
+	return nil
 }

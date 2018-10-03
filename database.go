@@ -285,7 +285,10 @@ func NewHistogramFSController(capacity int, k uint) *HistogramFSController {
 // If you want to create a fs controller with all ids from a storage you can use
 // IDList to create a list of all ids.
 func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramStorage) (*HistogramFSController, error) {
-	res := &HistogramFSController{Entries: make([]HistogramFSEntry, len(ids))}
+	res := &HistogramFSController{
+		Entries: make([]HistogramFSEntry, len(ids)),
+		K:       storage.Divisions(),
+	}
 	for i, id := range ids {
 		// lookup file name
 		path, ok := mapper.GetPath(id)
@@ -418,13 +421,17 @@ func GCHFileName(k uint, ext string) string {
 // in memory.
 type MemoryHistStorage struct {
 	Histograms []*Histogram
+	K          uint
 }
 
 func NewMemoryHistStorage(k uint, capacity int) *MemoryHistStorage {
 	if capacity < 0 {
 		capacity = 100
 	}
-	return &MemoryHistStorage{Histograms: make([]*Histogram, 0, capacity)}
+	return &MemoryHistStorage{
+		Histograms: make([]*Histogram, 0, capacity),
+		K:          k,
+	}
 }
 
 func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
@@ -432,4 +439,8 @@ func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
 		return nil, fmt.Errorf("Histogram for id %d not registered", id)
 	}
 	return s.Histograms[id], nil
+}
+
+func (s *MemoryHistStorage) Divisions() uint {
+	return s.K
 }

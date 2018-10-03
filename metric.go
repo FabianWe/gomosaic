@@ -37,6 +37,11 @@ type HistogramMetric func(hA, hB *Histogram) float64
 type HistogramStorage interface {
 	// GetHistogram returns the histogram for a previously registered ImageID.
 	GetHistogram(id ImageID) (*Histogram, error)
+
+	// Divisions returns the number of sub-divisons in each direction (called k
+	// in the histogram documentation). All histograms from this storage should
+	// have this number of sub-divisions.
+	Divisions() uint
 }
 
 // TODO Gone because ImageMetric needed to change
