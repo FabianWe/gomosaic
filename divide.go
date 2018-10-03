@@ -57,6 +57,14 @@ func (mode DivideMode) String() string {
 	}
 }
 
+// TileDivision represents the divison of an image into rectangles. See
+// ImageDivider for details about divisions.
+type TileDivision [][]image.Rectangle
+
+// Tiles are the tiles of an image. They're genrated from a TileDivision
+// and the image matrix is of the same size as the TileDivision.
+type Tiles [][]image.Image
+
 // ImageDivider is a type to divide an image into tiles. That is it creates
 // the areas which should be replaced by images from the database.
 //
@@ -73,7 +81,7 @@ func (mode DivideMode) String() string {
 //
 // (4) The result may be empty (or nil); rows may be empty.
 type ImageDivider interface {
-	Divide(image.Image) [][]image.Rectangle
+	Divide(image.Image) TileDivision
 }
 
 type FixedSizeDivider struct {
@@ -120,7 +128,7 @@ func (divider FixedSizeDivider) outerBound(imgBoundPosition, position int) int {
 
 // TODO test this (test cases,not just real world)
 
-func (divider FixedSizeDivider) Divide(img image.Image) [][]image.Rectangle {
+func (divider FixedSizeDivider) Divide(img image.Image) TileDivision {
 	bounds := img.Bounds()
 	// no division possible if bounds are empty
 	if bounds.Empty() {
@@ -131,7 +139,7 @@ func (divider FixedSizeDivider) Divide(img image.Image) [][]image.Rectangle {
 
 	numRows := divider.getSize(imgHeight, divider.Height)
 	numCols := divider.getSize(imgWidth, divider.Width)
-	res := make([][]image.Rectangle, numRows)
+	res := make(TileDivision, numRows)
 	for i := 0; i < numRows; i++ {
 		res[i] = make([]image.Rectangle, numCols)
 		for j := 0; j < numCols; j++ {
@@ -168,7 +176,7 @@ func (divider *FixedNumDivider) outerBound(divisionNum, index, imgBound, value i
 	return value
 }
 
-func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
+func (divider *FixedNumDivider) Divide(img image.Image) TileDivision {
 	// similar to FixedSizeArranger, but forces the dimensions
 	bounds := img.Bounds()
 	// no division possible if empty
@@ -199,7 +207,7 @@ func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
 	// TODO do something with rest (cut)
 	numRows := divider.NumY
 	numCols := divider.NumX
-	res := make([][]image.Rectangle, divider.NumY)
+	res := make(TileDivision, divider.NumY)
 	for i := 0; i < numRows; i++ {
 		res[i] = make([]image.Rectangle, numCols)
 		for j := 0; j < numCols; j++ {
@@ -214,12 +222,12 @@ func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
 	return res
 }
 
-func DivideImage(img image.Image, distribution [][]image.Rectangle, numRoutines int) ([][]image.Image, error) {
+func DivideImage(img image.Image, distribution TileDivision, numRoutines int) (Tiles, error) {
 	if numRoutines <= 0 {
 		numRoutines = 1
 	}
 	bounds := img.Bounds()
-	res := make([][]image.Image, len(distribution))
+	res := make(Tiles, len(distribution))
 	// any error that occurs sets this variable (first error)
 	// this is done later
 	var err error

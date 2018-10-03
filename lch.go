@@ -69,7 +69,7 @@ func (lch *LCH) Dist(other *LCH, delta HistogramMetric) (float64, error) {
 // It will never decrease the number of rectangles, only increase if required.
 //
 // This function is usally only triggered in debug mode.
-func RepairDistribution(distribution [][]image.Rectangle, numX, numY int) [][]image.Rectangle {
+func RepairDistribution(distribution TileDivision, numX, numY int) TileDivision {
 	y := len(distribution)
 	if y != numY {
 		log.WithFields(log.Fields{

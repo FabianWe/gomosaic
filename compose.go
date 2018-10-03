@@ -37,7 +37,7 @@ type ImageSelector interface {
 	// In this step usually some procomputation is done, for example computing
 	// GCHs or LCHs for each sub image.
 	// To generate the tiles you can use DivideImage.
-	Init(storage ImageStorage, query image.Image, dist [][]image.Rectangle) error
+	Init(storage ImageStorage, query image.Image, dist TileDivision) error
 
 	// SelectImage is called after Init and must return the most fitting image
 	// for the tile described by the coordinates tileY and tileX. That is
@@ -54,7 +54,7 @@ type ImageSelector interface {
 	//
 	// If no image can be selected (for example empty database) the function
 	// should return ErrNoImage.
-	SelectImage(storage ImageStorage, query image.Image, dist [][]image.Rectangle, tileY, tileX int) (ImageID, error)
+	SelectImage(storage ImageStorage, query image.Image, dist TileDivision, tileY, tileX int) (ImageID, error)
 }
 
 // ImageMetric is used to compare a database image (image identified by an id)
@@ -63,7 +63,7 @@ type ImageSelector interface {
 //
 // It is used in ImageMetricMinimizer which contains more information.
 type ImageMetric interface {
-	Init(storage ImageStorage, query image.Image, dist [][]image.Rectangle) error
+	Init(storage ImageStorage, query image.Image, dist TileDivision) error
 	Compare(storage ImageStorage, image ImageID, tileY, tileX int) (float64, error)
 }
 
@@ -82,6 +82,6 @@ func NewImageMetricMinimizer(metric ImageMetric) *ImageMetricMinimizer {
 	return &ImageMetricMinimizer{Metric: metric}
 }
 
-func (min *ImageMetricMinimizer) Init(storage ImageStorage, query image.Image, dist [][]image.Rectangle) error {
+func (min *ImageMetricMinimizer) Init(storage ImageStorage, query image.Image, dist TileDivision) error {
 	return min.Metric.Init(storage, query, dist)
 }
