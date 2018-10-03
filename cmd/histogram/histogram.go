@@ -23,7 +23,6 @@ import (
 	// These anonymous imports register handlers for jpg and png files, that
 	// is the decode method from the image package can now read these files.
 
-	_ "image/jpeg"
 	_ "image/png"
 
 	// Since we're not in the gomosaic package we have to import it
@@ -76,8 +75,8 @@ func main() {
 	}
 	fmt.Println("Done after", execTime)
 
-	// arr := gomosaic.NewFixedNumArranger(26, 30, true)
-	// distribution := arr.Divide(img)
+	// div := gomosaic.NewFixedSizeDivider(20, 13, gomosaic.DividePad)
+	// distribution := div.Divide(img)
 	//
 	// tiles, tilesErr := gomosaic.DivideImage(img, distribution)
 	// if tilesErr != nil {
