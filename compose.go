@@ -191,30 +191,38 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.
 	return result, nil
 }
 
-// InitStorage(storage ImageStorage) error
-// InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error
-// Compare(storage ImageStorage, image ImageID, tileY, tileX int) (float64, error)
-
 // TODO add synching between image storage and histogram storage
+
+// HistogramImageMetric implements ImageMetric by keeping a histogram storage
+// and computing histograms for a query image.
 type HistogramImageMetric struct {
 	HistStorage HistogramStorage
+	Metric      HistogramMetric
 	TileData    [][]*Histogram
 	K           uint
 	NumRoutines int
 }
 
-func NewHistogramImageMetric(storage HistogramStorage, numRoutines int) *HistogramImageMetric {
+// NewHistogramImageMetric returns a new histogram image metric given a metric
+// function between to histograms and the histogram storage to back the image
+// metric. NumRoutines is the number of things that run concurrently when
+// initializing the tile histograms.
+func NewHistogramImageMetric(storage HistogramStorage, metric HistogramMetric, numRoutines int) *HistogramImageMetric {
 	return &HistogramImageMetric{HistStorage: storage,
+		Metric:      metric,
 		TileData:    nil,
 		K:           storage.Divisions(),
 		NumRoutines: numRoutines}
 }
 
+// InitStorage does at the moment nothing.
 func (m *HistogramImageMetric) InitStorage(storage ImageStorage) error {
 	// probably some synching here?
 	return nil
 }
 
+// InitTiles concurrently computes the histograms of the tiles of the query
+// image.
 func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error {
 	tiles, tilesErr := DivideImage(query, dist, m.NumRoutines)
 	if tilesErr != nil {
@@ -267,4 +275,25 @@ func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image
 	}
 
 	return nil
+}
+
+// Compare compares a database image and a query image based on the histogram
+// metric function.
+func (m *HistogramImageMetric) Compare(storage ImageStorage, image ImageID, tileY, tileX int) (float64, error) {
+	// get histogram data for database image
+	hDatabase, dbErr := m.HistStorage.GetHistogram(image)
+	if dbErr != nil {
+		return -1.0, dbErr
+	}
+	// get histogram for tile
+	hTile := m.TileData[tileY][tileX]
+	return m.Metric(hTile, hDatabase), nil
+}
+
+// GCHSelector is an image selector that selects images that minimize the
+// histogram metric function Δ. Formally it is an ImageMetricMinimizer
+// and thus implements ImageSelector.
+func GCHSelector(histStorage HistogramStorage, delta HistogramMetric, numRoutines int) *ImageMetricMinimizer {
+	imageMetric := NewHistogramImageMetric(histStorage, delta, numRoutines)
+	return NewImageMetricMinimizer(imageMetric, numRoutines)
 }
