@@ -17,6 +17,7 @@ package gomosaic
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // ImageMetric is any function that can compare two images (given by their id).
@@ -94,9 +95,9 @@ func Manhattan(p, q []float64) float64 {
 	return result
 }
 
-// Euclidean returns the euclidean distance of two vectors, that is
-// sqrt( (p1 - q1)² + ... + (pn - qn)² ).
-func Euclidean(p, q []float64) float64 {
+// EuclideanDistance returns the euclidean distance of two
+// vectors, that is sqrt( (p1 - q1)² + ... + (pn - qn)² ).
+func EuclideanDistance(p, q []float64) float64 {
 	var sum float64
 	for i, e1 := range p {
 		e2 := q[i]
@@ -135,4 +136,87 @@ func CosineSimilarity(p, q []float64) float64 {
 	lengthP = math.Sqrt(lengthP)
 	lengthQ = math.Sqrt(lengthQ)
 	return 1.0 - (dotProduct / (lengthP * lengthQ))
+}
+
+// ChessboardDistance is the max over all absolute distances,
+// see https://reference.wolfram.com/language/ref/ChessboardDistance.html
+func ChessboardDistance(p, q []float64) float64 {
+	res := 0.0
+	for i, e1 := range p {
+		e2 := q[i]
+		res = math.Max(res, math.Abs(e1-e2))
+	}
+	return res
+}
+
+// CanberraDistance is a weighted version of the manhattan
+// distance, see https://en.wikipedia.org/wiki/Canberra_distance
+func CanberraDistance(p, q []float64) float64 {
+	res := 0.0
+	for i, e1 := range p {
+		e2 := q[i]
+		numerator := math.Abs(e1 - e2)
+		// assuming all values are positive the Abs is not required
+		denominator := math.Abs(e1) + math.Abs(e2)
+		res += (numerator / denominator)
+	}
+	return res
+}
+
+// The following variables are used for registering named
+// metrics.
+
+var (
+	histogramMetrics map[string]HistogramMetric
+)
+
+// RegisterHistogramMetric is used to register a named histogram
+// metric. It will only add the metric if the name does not
+// exist yet. The result is true if the metric was successfully
+// registered and false otherwise.
+// Some metrics are registered by default.
+// All names must be lowercase strings, the register and get
+// methods will always transform a string to lowercase.
+//
+// All metrics should be registered by an init method.
+func RegisterHistogramMetric(name string, metric HistogramMetric) bool {
+	name = strings.ToLower(name)
+	if _, has := histogramMetrics[name]; has {
+		return false
+	}
+	histogramMetrics[name] = metric
+	return true
+}
+
+// GetHistogramMetricNames returns a list of all registered
+// named histogram metrics. See RegisterHistogramMetric for
+// details.
+func GetHistogramMetricNames() []string {
+	res := make([]string, 0, len(histogramMetrics))
+	for key := range histogramMetrics {
+		res = append(res, key)
+	}
+	return res
+}
+
+// GetHistogramMetric returns a registered histogram metric.
+// Returns the metric and true on success and nil and false
+// otherwise.
+// See RegisterHistogramMetric for details.
+func GetHistogramMetric(name string) (HistogramMetric, bool) {
+	name = strings.ToLower(name)
+	if metric, has := histogramMetrics[name]; has {
+		return metric, true
+	}
+	return nil, false
+}
+
+func init() {
+	histogramMetrics = make(map[string]HistogramMetric)
+	RegisterHistogramMetric("manhattan", HistogramVectorMetric(Manhattan))
+	RegisterHistogramMetric("euclid", HistogramVectorMetric(EuclideanDistance))
+	RegisterHistogramMetric("min", HistogramVectorMetric(MinDistance))
+	RegisterHistogramMetric("cosine", HistogramVectorMetric(CosineSimilarity))
+	RegisterHistogramMetric("chessboard", HistogramVectorMetric(ChessboardDistance))
+	RegisterHistogramMetric("canberra", HistogramVectorMetric(CanberraDistance))
 }
