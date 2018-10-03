@@ -159,6 +159,12 @@ func GetInterP(quality uint) resize.InterpolationFunction {
 	}
 }
 
+var (
+	// DefaultResizer is the resizer that is used by default, if you're
+	// looking for a resizer default argument this seems useful.
+	DefaultResizer = NewNfntResizer(resize.MitchellNetravali)
+)
+
 // Resize calls nfnt/resize methods.
 func (resizer NfntResizer) Resize(width, height uint, img image.Image) image.Image {
 	return resize.Resize(width, height, img, resizer.InterP)

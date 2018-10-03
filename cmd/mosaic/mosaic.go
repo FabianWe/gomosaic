@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"os"
 	"path/filepath"
 	"time"
@@ -126,6 +126,22 @@ func main() {
 		log.Fatal(compseErr)
 	}
 	fmt.Println("Done after", execTime)
-	fmt.Println("Composed:")
-	fmt.Println(comp)
+	// compose mosaic
+	fmt.Println("Composing mosaic image")
+	mosaic, mosaicErr := gomosaic.ComposeMosaic(storage, comp, dist,
+		gomosaic.DefaultResizer, gomosaic.ForceResize)
+	execTime = time.Since(start)
+	if mosaicErr != nil {
+		log.Fatal(mosaicErr)
+	}
+	fmt.Println("Done after", execTime)
+	outFile, outErr := os.Create("mosaic.png")
+	if outErr != nil {
+		log.Fatal(outErr)
+	}
+	defer outFile.Close()
+	encErr := png.Encode(outFile, mosaic)
+	if encErr != nil {
+		log.Fatal(encErr)
+	}
 }
