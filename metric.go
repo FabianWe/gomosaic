@@ -15,18 +15,9 @@
 package gomosaic
 
 import (
-	"fmt"
 	"math"
 	"strings"
 )
-
-// ImageMetric is any function that can compare two images (given by their id).
-// Usually they should not load images into memory, but if it is required they
-// cann access the image via the storage.
-// If there is anything wrong the function should return an error.
-// The smaller the metric value is the more equal the images are considered.
-// Metric values should be ≥ 0.
-type ImageMetric func(a, b ImageID, storage ImageStorage) (float64, error)
 
 // HistogramMetric is a function that compares images based on histograms.
 // It has no other input than the histograms, especially it has no access to
@@ -48,27 +39,28 @@ type HistogramStorage interface {
 	GetHistogram(id ImageID) (*Histogram, error)
 }
 
-// HistogramImageMetric creates a new image metric given a histogram metric
-// and a histogram storage.
-// The image metric looks up both image ids in the histogram storage and
-// returns the the histogram metric of those histograms. If one of the
-// histograms cannot be received an error is returned.
-func HistogramImageMetric(m HistogramMetric, storage HistogramStorage) ImageMetric {
-	return func(a, b ImageID, iStorage ImageStorage) (float64, error) {
-		hA, aErr := storage.GetHistogram(a)
-		if aErr != nil {
-			return -1.0, aErr
-		}
-		hB, bErr := storage.GetHistogram(b)
-		if bErr != nil {
-			return -1.0, bErr
-		}
-		if hA.K != hB.K {
-			return -1.0, fmt.Errorf("Invalid histogram dimensions: %d != %d", hA.K, hB.K)
-		}
-		return m(hA, hB), nil
-	}
-}
+// TODO Gone because ImageMetric needed to change
+// // HistogramImageMetric creates a new image metric given a histogram metric
+// // and a histogram storage.
+// // The image metric looks up both image ids in the histogram storage and
+// // returns the the histogram metric of those histograms. If one of the
+// // histograms cannot be received an error is returned.
+// func HistogramImageMetric(m HistogramMetric, storage HistogramStorage) ImageMetric {
+// 	return func(a, b ImageID, iStorage ImageStorage) (float64, error) {
+// 		hA, aErr := storage.GetHistogram(a)
+// 		if aErr != nil {
+// 			return -1.0, aErr
+// 		}
+// 		hB, bErr := storage.GetHistogram(b)
+// 		if bErr != nil {
+// 			return -1.0, bErr
+// 		}
+// 		if hA.K != hB.K {
+// 			return -1.0, fmt.Errorf("Invalid histogram dimensions: %d != %d", hA.K, hB.K)
+// 		}
+// 		return m(hA, hB), nil
+// 	}
+// }
 
 // VectorMetric is a function that takes two vectors of the same length and
 // returns a metric value ("distance") of the two.
@@ -77,8 +69,6 @@ func HistogramImageMetric(m HistogramMetric, storage HistogramStorage) ImageMetr
 type VectorMetric func(p, q []float64) float64
 
 // HistogramVectorMetric converts a vector metric to a histogram metric.
-// With HistogramImageMetric a vector metric can be converted to an image
-// metric.
 func HistogramVectorMetric(vm VectorMetric) HistogramMetric {
 	return func(hA, hB *Histogram) float64 {
 		return vm(hA.Entries, hB.Entries)

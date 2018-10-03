@@ -223,22 +223,3 @@ type LCHStorage interface {
 	// GetLCH returns the LCH for a previously registered ImageID.
 	GetLCH(id ImageID) (*LCH, error)
 }
-
-// CreateLCHMetric returns an image metric that is based on the sum of
-// the GCHs.
-//
-// It returns |Δ(hA[1], hB[1])| + ... + |Δ(hA[n], hB[n])|.
-func CreateLCHMetric(delta HistogramMetric, storage LCHStorage) ImageMetric {
-	return func(a, b ImageID, imageStorage ImageStorage) (float64, error) {
-		// lookup both lchs
-		lchA, aErr := storage.GetLCH(a)
-		if aErr != nil {
-			return -1.0, aErr
-		}
-		lchB, bErr := storage.GetLCH(b)
-		if bErr != nil {
-			return -1.0, bErr
-		}
-		return lchA.Dist(lchB, delta)
-	}
-}
