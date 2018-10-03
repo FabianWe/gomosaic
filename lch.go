@@ -17,6 +17,7 @@ package gomosaic
 import (
 	"fmt"
 	"image"
+	"math"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -31,8 +32,35 @@ type LCH struct {
 	Histograms []*Histogram
 }
 
+// NewLCH creates a new LCH givent the histograms.
 func NewLCH(histograms []*Histogram) *LCH {
 	return &LCH{Histograms: histograms}
+}
+
+// Dist returns the distance between two LCHs parameterized by a HistogramMetric
+// two compare the histograms. It returns
+// |Δ(h1[1], h2[1])| + ... + |Δ(h1[n], h2[n])| if n is the number of GCHs
+// of the LCH.
+//
+// If the LCHs are of different dimensions or the GCHs inside the LCHs are
+// of different dimensions an error != nil is returned.
+func (lch *LCH) Dist(other *LCH, delta HistogramMetric) (float64, error) {
+	if len(lch.Histograms) != len(other.Histograms) {
+		return -1.0, fmt.Errorf("Invalid LCH dimensions: %d != %d",
+			len(lch.Histograms),
+			len(other.Histograms))
+	}
+	sum := 0.0
+	for i, h1 := range lch.Histograms {
+		h2 := other.Histograms[i]
+		if len(h1.Entries) != len(h2.Entries) {
+			return -1.0, fmt.Errorf("Invalid histogram dimensions (in LCH): %d != %d",
+				len(h1.Entries),
+				len(h2.Entries))
+		}
+		sum += math.Abs(delta(h1, h2))
+	}
+	return sum, nil
 }
 
 // RepairDistribution is used to ensure that distribution contains a matrix
@@ -185,4 +213,32 @@ func (s FiveLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	}
 	wg.Wait()
 	return NewLCH(res), nil
+}
+
+// LCHStorage maps image ids to LCHs.
+// By default the histograms of the LCHs should be normalized.
+//
+// Implementations must be safe for concurrent use.
+type LCHStorage interface {
+	// GetLCH returns the LCH for a previously registered ImageID.
+	GetLCH(id ImageID) (*LCH, error)
+}
+
+// CreateLCHMetric returns an image metric that is based on the sum of
+// the GCHs.
+//
+// It returns |Δ(hA[1], hB[1])| + ... + |Δ(hA[n], hB[n])|.
+func CreateLCHMetric(delta HistogramMetric, storage LCHStorage) ImageMetric {
+	return func(a, b ImageID, imageStorage ImageStorage) (float64, error) {
+		// lookup both lchs
+		lchA, aErr := storage.GetLCH(a)
+		if aErr != nil {
+			return -1.0, aErr
+		}
+		lchB, bErr := storage.GetLCH(b)
+		if bErr != nil {
+			return -1.0, bErr
+		}
+		return lchA.Dist(lchB, delta)
+	}
 }
