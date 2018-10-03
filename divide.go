@@ -81,7 +81,7 @@ type Tiles [][]image.Image
 //
 // (4) The result may be empty (or nil); rows may be empty.
 type ImageDivider interface {
-	Divide(image.Image) TileDivision
+	Divide(image.Rectangle) TileDivision
 }
 
 type FixedSizeDivider struct {
@@ -128,8 +128,7 @@ func (divider FixedSizeDivider) outerBound(imgBoundPosition, position int) int {
 
 // TODO test this (test cases,not just real world)
 
-func (divider FixedSizeDivider) Divide(img image.Image) TileDivision {
-	bounds := img.Bounds()
+func (divider FixedSizeDivider) Divide(bounds image.Rectangle) TileDivision {
 	// no division possible if bounds are empty
 	if bounds.Empty() {
 		return nil
@@ -176,9 +175,8 @@ func (divider *FixedNumDivider) outerBound(divisionNum, index, imgBound, value i
 	return value
 }
 
-func (divider *FixedNumDivider) Divide(img image.Image) TileDivision {
+func (divider *FixedNumDivider) Divide(bounds image.Rectangle) TileDivision {
 	// similar to FixedSizeArranger, but forces the dimensions
-	bounds := img.Bounds()
 	// no division possible if empty
 	if bounds.Empty() {
 		return nil

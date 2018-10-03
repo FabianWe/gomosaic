@@ -119,7 +119,7 @@ func main() {
 	selector := gomosaic.GCHSelector(histStorage, hMetric, 8)
 	selector.Init(storage)
 	div := gomosaic.NewFixedNumDivider(20, 30, false)
-	dist := div.Divide(img)
+	dist := div.Divide(img.Bounds())
 	comp, compseErr := selector.SelectImages(storage, img, dist)
 	execTime = time.Since(start)
 	if compseErr != nil {

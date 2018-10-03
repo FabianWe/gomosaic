@@ -112,7 +112,7 @@ func main() {
 	fmt.Println("Done after", execTime)
 
 	// div := gomosaic.NewFixedNumDivider(20, 30, false)
-	// distribution := div.Divide(img)
+	// distribution := div.Divide(img.Bounds())
 	//
 	// tiles, tilesErr := gomosaic.DivideImage(img, distribution, 8)
 	// if tilesErr != nil {

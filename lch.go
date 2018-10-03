@@ -126,7 +126,7 @@ func (s FourLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	// setting cut to false means that these blocks are not necessarily of the
 	// same size.
 	divider := NewFixedNumDivider(2, 2, false)
-	parts := divider.Divide(img)
+	parts := divider.Divide(img.Bounds())
 	if Debug {
 		// if in debug mode check for errors while dividing the image
 		parts = RepairDistribution(parts, 2, 2)
@@ -179,7 +179,7 @@ func (s FiveLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	// setting cut to false means that these blocks are not necessarily of the
 	// same size.
 	divider := NewFixedNumDivider(3, 3, false)
-	parts := divider.Divide(img)
+	parts := divider.Divide(img.Bounds())
 	if Debug {
 		// if in debug mode check for errors while dividing the image
 		parts = RepairDistribution(parts, 3, 3)
