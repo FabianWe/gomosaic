@@ -76,7 +76,7 @@ func main() {
 	}
 	fmt.Println("Done after", execTime)
 
-	scheme := gomosaic.NewFourLCHScheme()
+	scheme := gomosaic.NewFiveLCHScheme()
 	lch, lchErr := scheme.ComputLCH(img, 8)
 	if lchErr != nil {
 		log.Fatal(lchErr)

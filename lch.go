@@ -91,7 +91,7 @@ func NewFourLCHScheme() FourLCHScheme {
 	return FourLCHScheme{}
 }
 
-// ComputLCH returns exactly for histograms (N, W, S, E).
+// ComputLCH returns exactly four histograms (N, W, S, E).
 func (s FourLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	res := make([]*Histogram, 4)
 	// first distribute image into 4 blocks
@@ -120,7 +120,62 @@ func (s FourLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	}
 	// for each part compute GCH
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(len(dist))
+	for i, imgList := range dist {
+		go func(index int, list []image.Image) {
+			defer wg.Done()
+			// compute histogram from image list
+			res[index] = GenHistogramFromList(k, true, list...)
+		}(i, imgList)
+	}
+	wg.Wait()
+	return NewLCH(res), nil
+}
+
+// FiveLCHScheme implements the scheme with vie parts: north, west, south,
+// east and center.
+//
+// It implements LCHScheme, the LCH contains the GCHs for the parts in the order
+// described above.
+type FiveLCHScheme struct{}
+
+// NewFiveLCHScheme returns a new FourLCHScheme.
+func NewFiveLCHScheme() FiveLCHScheme {
+	return FiveLCHScheme{}
+}
+
+// ComputLCH returns exactly five histograms (N, W, S, E, C).
+func (s FiveLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
+	res := make([]*Histogram, 5)
+	// first distribute image into 9 blocks
+	// setting cut to false means that these blocks are not necessarily of the
+	// same size.
+	divider := NewFixedNumDivider(3, 3, false)
+	parts := divider.Divide(img)
+	if Debug {
+		// if in debug mode check for errors while dividing the image
+		parts = RepairDistribution(parts, 3, 3)
+	}
+	imageParts, partsErr := DivideImage(img, parts, 9)
+	if partsErr != nil {
+		return nil, fmt.Errorf("Error computing distribution for LCH: %v", partsErr)
+	}
+
+	var dist [][]image.Image = [][]image.Image{
+		// north
+		[]image.Image{imageParts[0][0], imageParts[0][1], imageParts[0][2]},
+		// west
+		[]image.Image{imageParts[0][0], imageParts[1][0], imageParts[2][0]},
+		// south
+		[]image.Image{imageParts[2][0], imageParts[2][1], imageParts[2][2]},
+		// east
+		[]image.Image{imageParts[0][2], imageParts[1][2], imageParts[2][2]},
+		// center
+		[]image.Image{imageParts[1][1]},
+	}
+	// for each part compute GCH
+	var wg sync.WaitGroup
+	wg.Add(len(dist))
 	for i, imgList := range dist {
 		go func(index int, list []image.Image) {
 			defer wg.Done()
