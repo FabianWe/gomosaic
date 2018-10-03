@@ -167,6 +167,13 @@ func (resizer NfntResizer) Resize(width, height uint, img image.Image) image.Ima
 // ImageID is used to unambiguously identify an image.
 type ImageID int
 
+const (
+	// NoImageID is used to signal errors etc. on images.
+	// It is usually never used and you don't have to care about ImageID < 0.
+	// Certain functions however use this value in a specific way.
+	NoImageID ImageID = -1
+)
+
 // ImageStorage is used to administrate a collection or database of images.
 // Images are not stored in memory but are identified by an id and can be loaded
 // into memory when required.

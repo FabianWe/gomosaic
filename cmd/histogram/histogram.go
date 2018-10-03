@@ -87,6 +87,30 @@ func main() {
 		fmt.Printf("Sum of %d: %.2f\n", i, gch.EntrySum())
 	}
 
+	fmt.Println("iteative")
+	start = time.Now()
+	for i := 0; i < 4; i++ {
+		v, _ := lch.Dist(lch, gomosaic.HistogramVectorMetric(gomosaic.CosineSimilarity))
+		fmt.Printf("%.2f\n", v)
+	}
+	execTime = time.Since(start)
+	fmt.Println("Done after", execTime)
+
+	ch := make(chan float64, 4)
+	fmt.Println("concurrent")
+	start = time.Now()
+	for i := 0; i < 4; i++ {
+		go func() {
+			v, _ := lch.Dist(lch, gomosaic.HistogramVectorMetric(gomosaic.CosineSimilarity))
+			ch <- v
+		}()
+	}
+	for i := 0; i < 4; i++ {
+		fmt.Printf("%.2f\n", <-ch)
+	}
+	execTime = time.Since(start)
+	fmt.Println("Done after", execTime)
+
 	// div := gomosaic.NewFixedNumDivider(20, 30, false)
 	// distribution := div.Divide(img)
 	//
