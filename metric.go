@@ -158,7 +158,9 @@ func CanberraDistance(p, q []float64) float64 {
 		numerator := math.Abs(e1 - e2)
 		// assuming all values are positive the Abs is not required
 		denominator := math.Abs(e1) + math.Abs(e2)
-		res += (numerator / denominator)
+		if denominator > 0.0 {
+			res += (numerator / denominator)
+		}
 	}
 	return res
 }

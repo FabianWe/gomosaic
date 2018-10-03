@@ -14,7 +14,9 @@
 
 package gomosaic
 
-import log "github.com/sirupsen/logrus"
+import (
+	log "github.com/sirupsen/logrus"
+)
 
 // ProgressFunc is a function that is used to inform a caller about the progress
 // of a called function.
