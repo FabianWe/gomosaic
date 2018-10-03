@@ -15,7 +15,9 @@
 package gomosaic
 
 import (
+	"fmt"
 	"image"
+	"sync"
 )
 
 // ResizeStrategy is a function that scales an image (img) to an image of
@@ -39,20 +41,108 @@ func ForceResize(resizer ImageResizer, tileWidth, tileHeight uint, img image.Ima
 }
 
 // TODO implement smarter strategies?
-// TODO we could use some concurrency here, butprobably resizing is also
-// running concurrently... so would be nice but it's okay?
+
+// TODO some smarter cache strategies?
+
+// ImageCache is used to cache resized versions of images during mosaic
+// generation. The same image with the same size might appear often in a mosaic
+// (or the same area). This and the fact that resizing an image is not very fast
+// makes it useful to cache the images.
+//
+// Caches are safe for concurrent use.
+type ImageCache struct {
+	m           *sync.Mutex
+	size        int
+	content     map[string]image.Image
+	insertOrder []string
+}
+
+// NewImageCache returns an empty image cache. size is the number of images that
+// will be cached. size must be ≥ 1.
+func NewImageCache(size int) *ImageCache {
+	if size <= 0 {
+		size = 1
+	}
+	var m sync.Mutex
+	return &ImageCache{
+		m:           &m,
+		size:        size,
+		content:     make(map[string]image.Image, size),
+		insertOrder: make([]string, 0, size),
+	}
+}
+
+func (cache *ImageCache) keyFormat(id ImageID, width, height int) string {
+	return fmt.Sprintf("%d-%d-%d", id, width, height)
+}
+
+func (cache *ImageCache) lookup(key string) image.Image {
+	if img, has := cache.content[key]; has {
+		return img
+	}
+	return nil
+}
+
+// Put adds an image to the cache. Usually Put is called after Get: If the
+// image was not found in the cache it is scaled and then added to the cache via
+// Put.
+func (cache *ImageCache) Put(id ImageID, width, height int, img image.Image) {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+	keyFmt := cache.keyFormat(id, width, height)
+	// first check if image already in cache, if yes do nothing
+	if lookup := cache.lookup(keyFmt); lookup != nil {
+		return
+	}
+	// check if cache is full
+	if len(cache.insertOrder) < cache.size {
+		cache.insertOrder = append(cache.insertOrder, keyFmt)
+		cache.content[keyFmt] = img
+	} else {
+		// cache full, remove first element form cache
+		// since size must be >= 1 this should be fine
+		fst := cache.insertOrder[0]
+		// remove from slice
+		cache.insertOrder = cache.insertOrder[1:]
+		cache.insertOrder = append(cache.insertOrder, keyFmt)
+		// remove from map and add to map
+		delete(cache.content, fst)
+		cache.content[keyFmt] = img
+	}
+}
+
+// Get returns the image from the cache. If the return value is nil the image
+// was not found in the cache and should be added to the cache by Put.
+func (cache *ImageCache) Get(id ImageID, width, height int) image.Image {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+	// check if item is in cache
+	keyFmt := cache.keyFormat(id, width, height)
+	return cache.lookup(keyFmt)
+}
 
 func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
-	dbImage ImageID, resizer ImageResizer, s ResizeStrategy) error {
+	dbImage ImageID, resizer ImageResizer, s ResizeStrategy,
+	cache *ImageCache) error {
+	// so sorry for the signature
 	// read image
-	img, imgErr := storage.LoadImage(dbImage)
-	if imgErr != nil {
-		return imgErr
-	}
-	// now resize the image given the strategy
 	tileWidth := area.Dx()
 	tileHeight := area.Dy()
-	img = s(resizer, uint(tileWidth), uint(tileHeight), img)
+	var img image.Image
+	// first try to lookup the image in the cache
+	img = cache.Get(dbImage, tileWidth, tileHeight)
+	if img == nil {
+		var imgErr error
+		// use storate to read image and then resize it
+		img, imgErr = storage.LoadImage(dbImage)
+		if imgErr != nil {
+			return imgErr
+		}
+		// now resize the image given the strategy
+		img = s(resizer, uint(tileWidth), uint(tileHeight), img)
+		// add to cache
+		cache.Put(dbImage, tileWidth, tileHeight, img)
+	}
 	scaledBounds := img.Bounds()
 	for y := 0; y < tileHeight; y++ {
 		for x := 0; x < tileWidth; x++ {
@@ -65,6 +155,8 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 	return nil
 }
 
+// TODO we could use some concurrency here, butprobably resizing is also
+// running concurrently... so would be nice but it's okay?
 // doc: mosaic division must start from(0, 0)
 func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	mosaicDivison TileDivision, resizer ImageResizer, s ResizeStrategy) (image.Image, error) {
@@ -85,6 +177,8 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	// to (width, height)
 	resBounds := image.Rect(0, 0, lastTile.Max.X, lastTile.Max.Y)
 	res = image.NewRGBA(resBounds)
+	// size should be okay?
+	cache := NewImageCache(15)
 	for i := 0; i < numTilesVert; i++ {
 		tilesCol := symbolicTiles[i]
 		divisionCol := mosaicDivison[i]
@@ -92,7 +186,7 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 		for j := 0; j < lenCol; j++ {
 			tileArea := divisionCol[j]
 			dbImage := tilesCol[j]
-			insertTile(res, tileArea, storage, dbImage, resizer, s)
+			insertTile(res, tileArea, storage, dbImage, resizer, s, cache)
 		}
 	}
 
