@@ -94,6 +94,8 @@ type ImageMetricMinimizer struct {
 	NumRoutines int
 }
 
+// NewImageMetricMinimizer returns a new metric minimizer given the metric to
+// use and the number of go routines to run when selecting images.
 func NewImageMetricMinimizer(metric ImageMetric, numRoutines int) *ImageMetricMinimizer {
 	if numRoutines <= 0 {
 		numRoutines = 1
@@ -101,11 +103,15 @@ func NewImageMetricMinimizer(metric ImageMetric, numRoutines int) *ImageMetricMi
 	return &ImageMetricMinimizer{Metric: metric, NumRoutines: numRoutines}
 }
 
+// Init just calls InitStorage of the metric.
 func (min *ImageMetricMinimizer) Init(storage ImageStorage) error {
 	return min.Metric.InitStorage(storage)
 }
 
 // TODO test with smaller buffer if everything is okay
+
+// SelectImages selects the image that minimizes the metric for each tile.
+// It computes the most fitting image for NumRoutines tiles concurrently.
 func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.Image, dist TileDivision) ([][]ImageID, error) {
 	if initErr := min.Metric.InitTiles(storage, query, dist); initErr != nil {
 		return nil, initErr
