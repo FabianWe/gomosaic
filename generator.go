@@ -44,6 +44,19 @@ const (
 	DividePad
 )
 
+func (mode DivideMode) String() string {
+	switch mode {
+	case DivideCrop:
+		return "DivideCrop"
+	case DivideAdjust:
+		return "DivideAdjust"
+	case DividePad:
+		return "DividePad"
+	default:
+		return fmt.Sprintf("DivideMode(%d)", mode)
+	}
+}
+
 // ImageDivider is a type to divide an image into tiles. That is it creates
 // the areas which should be replaced by images from the database.
 //
@@ -109,6 +122,10 @@ func (divider FixedSizeDivider) outerBound(imgBoundPosition, position int) int {
 
 func (divider FixedSizeDivider) Divide(img image.Image) [][]image.Rectangle {
 	bounds := img.Bounds()
+	// no division possible if bounds are empty
+	if bounds.Empty() {
+		return nil
+	}
 	imgWidth := bounds.Dx()
 	imgHeight := bounds.Dy()
 
@@ -139,28 +156,31 @@ func NewFixedNumDivider(numX, numY int, cut bool) *FixedNumDivider {
 
 func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
 	// similar to FixedSizeArranger, but forces the dimensions
-
 	bounds := img.Bounds()
+	// no division possible if empty
+	if bounds.Empty() {
+		return nil
+	}
 	imgWidth := bounds.Dx()
 	imgHeight := bounds.Dy()
 
 	// some sane defaults if numX or numY should be 0, just to be sure
-	width := 1
-	height := 1
+	tileWidth := 1
+	tileHeight := 1
 	if divider.NumX > 0 {
-		width = imgWidth / divider.NumX
+		tileWidth = imgWidth / divider.NumX
 	}
 	if divider.NumY > 0 {
-		height = imgHeight / divider.NumY
+		tileHeight = imgHeight / divider.NumY
 	}
 	// this should take care of images that are too small, if such small images
 	// are used the results will be bad I guess, this is just a way to ensure
 	// that some part of the image is used
-	if width <= 0 {
-		width = 1
+	if tileWidth <= 0 {
+		tileWidth = 1
 	}
-	if height <= 0 {
-		height = 1
+	if tileHeight <= 0 {
+		tileHeight = 1
 	}
 	// TODO do something with rest (cut)
 	numRows := divider.NumY
@@ -169,33 +189,66 @@ func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
 	for i := 0; i < numRows; i++ {
 		res[i] = make([]image.Rectangle, numCols)
 		for j := 0; j < numCols; j++ {
-			x0 := bounds.Min.X + j*width
-			y0 := bounds.Min.Y + i*height
-			x1 := x0 + width
-			y1 := y0 + height
+			x0 := bounds.Min.X + j*tileWidth
+			y0 := bounds.Min.Y + i*tileHeight
+			x1 := x0 + tileWidth
+			y1 := y0 + tileHeight
 			res[i][j] = image.Rect(x0, y0, x1, y1)
 		}
 	}
 	return res
 }
 
-func DivideImage(img image.Image, distribution [][]image.Rectangle) ([][]image.Image, error) {
+func DivideImage(img image.Image, distribution [][]image.Rectangle, numRoutines int) ([][]image.Image, error) {
+	if numRoutines <= 0 {
+		numRoutines = 1
+	}
 	bounds := img.Bounds()
 	res := make([][]image.Image, len(distribution))
-	for i, inner := range distribution {
-		res[i] = make([]image.Image, len(inner))
-		for j, r := range inner {
-			// first intersect tomake sure that we truly have a rectangle in the image
-			r = r.Intersect(bounds)
-			// now we try to get the subimage
-			// because the intersection can be empty the computed image can be
-			// empty as well
-			subImg, subErr := SubImage(img, r)
-			if subErr != nil {
-				return nil, fmt.Errorf("Creation of subimage failed: %v", subErr)
+	// any error that occurs sets this variable (first error)
+	// this is done later
+	var err error
+
+	// struct that we use for the channel
+	type job struct {
+		i, j int
+	}
+
+	jobs := make(chan job, 1000)
+	errorChan := make(chan error, 1000)
+
+	for w := 0; w < numRoutines; w++ {
+		go func() {
+			for next := range jobs {
+				r := distribution[next.i][next.j]
+				// first intersect tom ake sure that we truly have a rectangle in the image
+				r = r.Intersect(bounds)
+				// now we try to get the subimage
+				// because the intersection can be empty the computed image can be
+				// empty as well
+				subImg, subErr := SubImage(img, r)
+				res[next.i][next.j] = subImg
+				errorChan <- subErr
 			}
-			res[i][j] = subImg
+		}()
+	}
+	go func() {
+		for i, col := range distribution {
+			// initialize res[i]
+			res[i] = make([]image.Image, len(col))
+			for j := 0; j < len(col); j++ {
+				jobs <- job{i, j}
+			}
+		}
+		close(jobs)
+	}()
+	for _, col := range distribution {
+		for j := 0; j < len(col); j++ {
+			nextErr := <-errorChan
+			if nextErr != nil && err != nil {
+				err = nextErr
+			}
 		}
 	}
-	return res, nil
+	return res, err
 }
