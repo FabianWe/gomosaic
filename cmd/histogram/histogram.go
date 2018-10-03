@@ -23,6 +23,7 @@ import (
 	// These anonymous imports register handlers for jpg and png files, that
 	// is the decode method from the image package can now read these files.
 
+	_ "image/jpeg"
 	_ "image/png"
 
 	// Since we're not in the gomosaic package we have to import it
