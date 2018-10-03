@@ -22,7 +22,7 @@ import (
 
 	// These anonymous imports register handlers for jpg and png files, that
 	// is the decode method from the image package can now read these files.
-	_ "image/jpeg"
+
 	_ "image/png"
 
 	// Since we're not in the gomosaic package we have to import it
@@ -74,4 +74,27 @@ func main() {
 		fmt.Printf("Sum of all entries is %.2f\n", normalized.EntrySum())
 	}
 	fmt.Println("Done after", execTime)
+
+	// arr := gomosaic.NewFixedNumArranger(26, 30, true)
+	// distribution := arr.Divide(img)
+	//
+	// tiles, tilesErr := gomosaic.DivideImage(img, distribution)
+	// if tilesErr != nil {
+	// 	log.Fatal(tilesErr)
+	// }
+	//
+	// outDir := "out"
+	// for i, row := range tiles {
+	// 	for j, tile := range row {
+	// 		f, openErr := os.Create(filepath.Join(outDir, fmt.Sprintf("tile-%d-%d.jpg", i, j)))
+	// 		if openErr != nil {
+	// 			log.Fatal(openErr)
+	// 		}
+	// 		decodeErr = jpeg.Encode(f, tile, &jpeg.Options{Quality: 100})
+	// 		f.Close()
+	// 		if decodeErr != nil {
+	// 			log.Fatal(decodeErr)
+	// 		}
+	// 	}
+	// }
 }

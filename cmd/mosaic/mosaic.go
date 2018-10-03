@@ -91,5 +91,4 @@ func main() {
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
-	// fmt.Println(bar)
 }

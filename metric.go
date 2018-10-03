@@ -163,8 +163,8 @@ func CanberraDistance(p, q []float64) float64 {
 	return res
 }
 
-// The following variables are used for registering named
-// metrics.
+// The following variables and types are used for registering
+// named metrics.
 
 var (
 	histogramMetrics map[string]HistogramMetric
