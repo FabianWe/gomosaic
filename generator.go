@@ -154,6 +154,20 @@ func NewFixedNumDivider(numX, numY int, cut bool) *FixedNumDivider {
 	return &FixedNumDivider{NumX: numX, NumY: numY, Cut: cut}
 }
 
+// divisionNum either row or column
+func (divider *FixedNumDivider) outerBound(divisionNum, index, imgBound, value int) int {
+	if index+1 == divisionNum {
+		// we're in the last row / column, depending on cut decide what to do
+		if divider.Cut {
+			// we cut the image, thus return the value
+			return value
+		}
+		// don't cut image, thus the rectangle becomes larger, return the bound
+		return imgBound
+	}
+	return value
+}
+
 func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
 	// similar to FixedSizeArranger, but forces the dimensions
 	bounds := img.Bounds()
@@ -191,8 +205,9 @@ func (divider *FixedNumDivider) Divide(img image.Image) [][]image.Rectangle {
 		for j := 0; j < numCols; j++ {
 			x0 := bounds.Min.X + j*tileWidth
 			y0 := bounds.Min.Y + i*tileHeight
-			x1 := x0 + tileWidth
-			y1 := y0 + tileHeight
+			// TODO think this through again...
+			x1 := divider.outerBound(numCols, j, bounds.Max.X, x0+tileWidth)
+			y1 := divider.outerBound(numRows, i, bounds.Max.Y, y0+tileHeight)
 			res[i][j] = image.Rect(x0, y0, x1, y1)
 		}
 	}

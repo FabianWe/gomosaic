@@ -50,7 +50,7 @@ type HistogramStorage interface {
 
 // HistogramImageMetric creates a new image metric given a histogram metric
 // and a histogram storage.
-// The image mtric looks up both image ids in the histogram storage and
+// The image metric looks up both image ids in the histogram storage and
 // returns the the histogram metric of those histograms. If one of the
 // histograms cannot be received an error is returned.
 func HistogramImageMetric(m HistogramMetric, storage HistogramStorage) ImageMetric {
