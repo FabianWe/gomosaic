@@ -1,6 +1,7 @@
 # executables
 /mosaic
 /histogram
+/playground
 
 # Binaries for programs and plugins
 *.exe

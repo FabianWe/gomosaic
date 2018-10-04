@@ -58,7 +58,13 @@ type replState struct {
 	numRoutines int
 }
 
-type replCommand func(state *replState, args ...string)
+type replCommandFunc func(state *replState, args ...string) bool
+
+type replCommand struct {
+	exec        replCommandFunc
+	usage       string
+	description string
+}
 
 func isEOF(r []rune, i int) bool {
 	return i == len(r)
@@ -179,44 +185,74 @@ var commandMap map[string]replCommand
 
 func init() {
 	commandMap = make(map[string]replCommand, 20)
-	commandMap["help"] = helpCommand
-	commandMap["exit"] = exitCommand
-	commandMap["pwd"] = pwdCommand
-	commandMap["cd"] = cdCommand
-	commandMap["image-info"] = imageInfo
+	commandMap["help"] = replCommand{
+		exec:        helpCommand,
+		usage:       "help",
+		description: "Show help.",
+	}
+	commandMap["exit"] = replCommand{
+		exec:        exitCommand,
+		usage:       "exit",
+		description: "Exit the program.",
+	}
+	commandMap["pwd"] = replCommand{
+		exec:        pwdCommand,
+		usage:       "pwd",
+		description: "Show current working directory.",
+	}
+	commandMap["cd"] = replCommand{
+		exec:        cdCommand,
+		usage:       "cd <DIR>",
+		description: "Change working directory to the specified directory",
+	}
+	commandMap["image-info"] = replCommand{
+		exec:  imageInfo,
+		usage: "image-info [\"list\"]",
+		description: "Show information about the images that are considered" +
+			"database images. This does not mean that all these images have some" +
+			"precomputed data, like histograms. Only that they were found as" +
+			"possible images. You have to use other commands to load precomputed" +
+			"data.\n\nIf \"list\" is provided a list of all images will be printed" +
+			"note that this can be quite large",
+	}
 }
 
-func helpCommand(state *replState, args ...string) {
+func helpCommand(state *replState, args ...string) bool {
 	fmt.Println("The gomosaic generator runs in REPL mode, meaning you can" +
 		"interactively generate mosaics by entering commands")
 	fmt.Println("A list of commands follows")
 	fmt.Println()
 	fmt.Println("help - Show this help text")
+	return true
 }
 
-func exitCommand(state *replState, args ...string) {
+func exitCommand(state *replState, args ...string) bool {
 	fmt.Println("Exiting gomosaic. Good bye!")
 	os.Exit(0)
+	// ereturn is requred
+	return true
 }
 
-func pwdCommand(state *replState, args ...string) {
+func pwdCommand(state *replState, args ...string) bool {
 	abs, absErr := filepath.Abs(state.workingDir)
 	if absErr != nil {
 		fmt.Println("Error:", absErr)
+		return true
 	}
 	fmt.Println(abs)
+	return true
 }
 
-func cdCommand(state *replState, args ...string) {
+func cdCommand(state *replState, args ...string) bool {
 	if len(args) != 1 {
-		fmt.Println("Error: Usage: \"cd <DIR>\"")
+		return false
 	}
 	path := args[0]
 	var expandErr error
 	path, expandErr = homedir.Expand(path)
 	if expandErr != nil {
 		fmt.Println("Error: Changing directory failed:", expandErr)
-		return
+		return true
 	}
 	if fi, err := os.Lstat(path); err != nil {
 		fmt.Println("Error: Changing directory failed:", err)
@@ -227,18 +263,22 @@ func cdCommand(state *replState, args ...string) {
 			fmt.Println("Error: Not a directory:", path)
 		}
 	}
+	return true
 }
 
-func imageInfo(state *replState, args ...string) {
+func imageInfo(state *replState, args ...string) bool {
 	switch {
 	case len(args) == 0:
 		fmt.Println("Number of database images:", state.fsMapper.Len())
-		return
+		return true
 	case args[0] == "list":
 		for _, path := range state.fsMapper.IDMapping {
 			fmt.Printf("  %s", path)
 		}
 		fmt.Println("Total:", state.fsMapper.Len())
+		return true
+	default:
+		return false
 	}
 }
 
@@ -266,8 +306,11 @@ func repl(state *replState) {
 				return
 			}
 			cmd := parsedCmd[0]
-			if replFunc, ok := commandMap[cmd]; ok {
-				replFunc(state, parsedCmd[1:]...)
+			if replCmd, ok := commandMap[cmd]; ok {
+				if !replCmd.exec(state, parsedCmd[1:]...) {
+					fmt.Println("Invalid command syntax")
+					fmt.Println("Usage:", replCmd.usage)
+				}
 			} else {
 				fmt.Printf("Unknown command \"%s\"\n", cmd)
 			}

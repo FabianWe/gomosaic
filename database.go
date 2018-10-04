@@ -55,6 +55,12 @@ func NewFSMapper() *FSMapper {
 	}
 }
 
+// Clears removes all registered images from the mappings.
+func (m *FSMapper) Clear() {
+	m.NameMapping = make(map[string]ImageID)
+	m.IDMapping = nil
+}
+
 // Len returns the number of images stored in the mapper.
 func (m *FSMapper) Len() int {
 	return len(m.IDMapping)
@@ -121,53 +127,52 @@ func (m *FSMapper) Register(path string) (ImageID, bool) {
 	return id, true
 }
 
-// CreateFSMapper creates an FSMapper containing images from the root directory.
+// Load scans path for images supported by gomosaic.
+//
 // All files for which filter returns true will be registered to the mapping.
 // If recursive is true also subdirectories of root will be scanned, otherwise
 // only root is scanned.
 //
 // The filter function can be nil and is then set to JPGAndPNG. Any error while
 // scanning the directory / the directories is returned together with nil.
-func CreateFSMapper(root string, recursive bool, filter SupportedImageFunc) (*FSMapper, error) {
+func (m *FSMapper) Load(path string, recursive bool, filter SupportedImageFunc) error {
 	if filter == nil {
 		filter = JPGAndPNG
 	}
-	root, absErr := filepath.Abs(root)
+	abs, absErr := filepath.Abs(path)
 	switch {
 	case absErr != nil:
-		return nil, absErr
+		return absErr
 	case recursive:
-		return createFSMapperRecursive(root, filter)
+		return m.loadRecursive(abs, filter)
 	default:
-		return createFSMapperNonRecursive(root, filter)
+		return m.loadNonRecursive(abs, filter)
 	}
 }
 
-func createFSMapperNonRecursive(root string, filter SupportedImageFunc) (*FSMapper, error) {
-	result := NewFSMapper()
-	files, err := ioutil.ReadDir(root)
+func (m *FSMapper) loadNonRecursive(path string, filter SupportedImageFunc) error {
+	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, file := range files {
 		if !file.IsDir() && filter(filepath.Ext(file.Name())) {
-			abs := filepath.Join(root, file.Name())
-			if _, success := result.Register(abs); !success {
+			abs := filepath.Join(path, file.Name())
+			if _, success := m.Register(abs); !success {
 				log.WithField("path", abs).Info("Image already registered")
 			}
 		}
 	}
-	return result, nil
+	return nil
 }
 
-func createFSMapperRecursive(root string, filter SupportedImageFunc) (*FSMapper, error) {
-	result := NewFSMapper()
+func (m *FSMapper) loadRecursive(path string, filter SupportedImageFunc) error {
 	walkFunc := func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
 			return err
 		case !info.IsDir() && filter(filepath.Ext(path)):
-			if _, success := result.Register(path); !success {
+			if _, success := m.Register(path); !success {
 				log.WithField("path", path).Info("Image already registered")
 			}
 			return nil
@@ -175,10 +180,29 @@ func createFSMapperRecursive(root string, filter SupportedImageFunc) (*FSMapper,
 			return nil
 		}
 	}
-	if err := filepath.Walk(root, walkFunc); err != nil {
+	if err := filepath.Walk(path, walkFunc); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateFSMapper creates an FSMapper containing images from the root directory.
+// All files for which filter returns true will be registered to the mapping.
+// If recursive is true also subdirectories of root will be scanned, otherwise
+// only root is scanned.
+//
+// The filter function can be nil and is then set to JPGAndPNG. Any error while
+// scanning the directory / the directories is returned together with nil.
+//
+// This is the same as creating a new FSMapper and then calling its load method.
+// The only difference is that on an error nil will be returned (not a mapper
+// containing some images).
+func CreateFSMapper(root string, recursive bool, filter SupportedImageFunc) (*FSMapper, error) {
+	res := NewFSMapper()
+	if err := res.Load(root, recursive, filter); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return res, nil
 }
 
 // Gone returns images that are gone, i.e. images that are not registered
