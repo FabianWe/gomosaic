@@ -16,6 +16,7 @@ package gomosaic
 
 import (
 	"fmt"
+	"io"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -71,12 +72,13 @@ func LoggerProgressFunc(prefix string, max, step int) ProgressFunc {
 	}
 }
 
-// StdProgressFunc is a parameterized ProgressFunc that logs to stdout.
+// StdProgressFunc is a parameterized ProgressFunc that logs to the
+// specified writer.
 // The output describes the progress (how many of how many objects processed).
 // Log messages may have an addition prefix. max is the total number of elements
 // to process and step describes how often to print to the log (for example
 // step = 100 every 100 items).
-func StdProgressFunc(prefix string, max, step int) ProgressFunc {
+func StdProgressFunc(w io.Writer, prefix string, max, step int) ProgressFunc {
 	return func(num int) {
 		if step == 0 {
 			return
