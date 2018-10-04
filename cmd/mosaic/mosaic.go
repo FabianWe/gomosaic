@@ -348,6 +348,8 @@ func imageStorage(state *replState, args ...string) bool {
 		state.fsMapper.Clear()
 		if loadErr := state.fsMapper.Load(dir, recursive, gomosaic.JPGAndPNG); loadErr != nil {
 			fmt.Println("Error: Can't read image list:", loadErr)
+			fmt.Println("Clearing the storage, including images previously added")
+			state.fsMapper.Clear()
 		} else {
 			fmt.Println("Successfully read", state.fsMapper.Len(), "images")
 			fmt.Println("Don't forget to (re)load precomputed data if required!")

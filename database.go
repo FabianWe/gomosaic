@@ -135,6 +135,9 @@ func (m *FSMapper) Register(path string) (ImageID, bool) {
 //
 // The filter function can be nil and is then set to JPGAndPNG. Any error while
 // scanning the directory / the directories is returned together with nil.
+//
+// Note that if an error occurs it is still possible that some images were added
+// to the storage.
 func (m *FSMapper) Load(path string, recursive bool, filter SupportedImageFunc) error {
 	if filter == nil {
 		filter = JPGAndPNG
