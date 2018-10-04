@@ -62,7 +62,7 @@ type Command struct {
 	Description string
 }
 
-type CommandExecutor interface {
+type CommandHandler interface {
 	Init(s *ExecutorState)
 	Before(s *ExecutorState)
 	OnSuccess(s *ExecutorState)
