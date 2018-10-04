@@ -428,6 +428,52 @@ func (c *HistogramFSController) CheckData(k uint, checkK bool, checkNormalized b
 	return errors.New(strings.Join(errs, "\n"))
 }
 
+// Map computes the mapping filename ↦ histogram. That is useful sometimes,
+// especially when computing the diff between this and an FSMapper.
+func (c *HistogramFSController) Map() map[string]*Histogram {
+	res := make(map[string]*Histogram, len(c.Entries))
+	for _, entry := range c.Entries {
+		res[entry.Path] = entry.Histogram
+	}
+	return res
+}
+
+// MissingEntries computes the set of all images that are present in the mapping
+// m but have no matching entry in the histogram.
+//
+// That is: For these images new histograms must be computed.
+// HistMap is the map as computed by the Map() function. It is an argument to
+// avoid multiple compoutations of it if used more often. Just set it to nil
+// and it will be computed with the map function.
+func (c *HistogramFSController) MissingEntries(m *FSMapper, histMap map[string]*Histogram) []string {
+	if histMap == nil {
+		histMap = c.Map()
+	}
+	res := make([]string, 0)
+	for _, path := range m.IDMapping {
+		// lookup in hist mapp
+		if _, has := histMap[path]; !has {
+			// not found, add to result
+			res = append(res, path)
+		}
+	}
+	return res
+}
+
+// AddtionalEntries computes all images files that are present in the histogram
+// controller but not in the mapper. Usually that means that the image has been
+// deleted and is no longer required.
+func (c *HistogramFSController) AddtionalEntries(m *FSMapper) []string {
+	res := make([]string, 0)
+	for _, entry := range c.Entries {
+		path := entry.Path
+		if _, has := m.GetID(path); !has {
+			res = append(res, path)
+		}
+	}
+	return res
+}
+
 // GCHFileName returns the proposed filename for a file containing global
 // color histograms.
 // When saving HistogramFSController instances (that's the type used for storing
@@ -466,6 +512,11 @@ func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
 		return nil, fmt.Errorf("Histogram for id %d not registered", id)
 	}
 	return s.Histograms[id], nil
+}
+
+func MemHistStorageFromFSMapper(mapper *FSMapper, fileContent *HistogramFSController) (*Histogram, error) {
+	// first we create a map
+	return nil, nil
 }
 
 func (s *MemoryHistStorage) Divisions() uint {
