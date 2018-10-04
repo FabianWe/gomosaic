@@ -31,12 +31,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func init() {
-	if gomosaic.Debug {
-		log.SetLevel(log.DebugLevel)
-	}
-}
-
 func main() {
 	// seems reasonable
 	initialRoutines := runtime.NumCPU() * 2
@@ -50,25 +44,32 @@ func main() {
 		os.Exit(1)
 	}
 	if len(os.Args) == 1 {
-		repl(&replState{
+		mapper := gomosaic.NewFSMapper()
+		repl(&ExecutorState{
 			// dir is always an absolute path
-			workingDir:  dir,
-			numRoutines: initialRoutines,
-			fsMapper:    gomosaic.NewFSMapper(),
+			WorkingDir:     dir,
+			NumRoutines:    initialRoutines,
+			Mapper:         mapper,
+			ImgStorage:     gomosaic.NewFSImageDB(mapper),
+			HistController: nil,
+			Verbose:        true,
 		})
 	}
 }
 
-type replState struct {
-	workingDir  string
-	fsMapper    *gomosaic.FSMapper
-	numRoutines int
+type ExecutorState struct {
+	WorkingDir     string
+	Mapper         *gomosaic.FSMapper
+	ImgStorage     *gomosaic.FSImageDB
+	NumRoutines    int
+	HistController *gomosaic.HistogramFSController
+	Verbose        bool
 }
 
-type replCommandFunc func(state *replState, args ...string) bool
+type CommandFunc func(state *ExecutorState, args ...string) bool
 
-type replCommand struct {
-	exec        replCommandFunc
+type Command struct {
+	exec        CommandFunc
 	usage       string
 	description string
 }
@@ -188,31 +189,35 @@ L:
 	return res, nil
 }
 
-var commandMap map[string]replCommand
+var commandMap map[string]Command
 
 func init() {
-	commandMap = make(map[string]replCommand, 20)
-	commandMap["help"] = replCommand{
+	if gomosaic.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	commandMap = make(map[string]Command, 20)
+	commandMap["help"] = Command{
 		exec:        helpCommand,
 		usage:       "help",
 		description: "Show help.",
 	}
-	commandMap["exit"] = replCommand{
+	commandMap["exit"] = Command{
 		exec:        exitCommand,
 		usage:       "exit",
 		description: "Exit the program.",
 	}
-	commandMap["pwd"] = replCommand{
+	commandMap["pwd"] = Command{
 		exec:        pwdCommand,
 		usage:       "pwd",
 		description: "Show current working directory.",
 	}
-	commandMap["cd"] = replCommand{
+	commandMap["cd"] = Command{
 		exec:        cdCommand,
 		usage:       "cd <DIR>",
 		description: "Change working directory to the specified directory",
 	}
-	commandMap["storage"] = replCommand{
+	commandMap["storage"] = Command{
 		exec:  imageStorage,
 		usage: "storage [list] or storage load [DIR]",
 		description: "This command controls the images that are considered" +
@@ -224,9 +229,18 @@ func init() {
 			"if load is used the image storage will be initialized with images from" +
 			"the directory (working directory if no image provided)",
 	}
+	commandMap["gch"] = Command{
+		exec:  gchCommand,
+		usage: "gch create [k] or gch TODO",
+		description: "Used to administrate global color histograms (GCHs)\n\n" +
+			"If \"create\" is used GCHs are created for all images in the current" +
+			"storage. The optional argument k must be a number between 1 and 256." +
+			"See usage documentation / Wiki for details about this value. 8 is the" +
+			"default value and should be fine.",
+	}
 }
 
-func getPath(state *replState, path string) (string, error) {
+func getPath(state *ExecutorState, path string) (string, error) {
 	var res string
 	// first extend with homedir
 	var pathErr error
@@ -239,7 +253,7 @@ func getPath(state *replState, path string) (string, error) {
 	// if relative path we have to join with the base directory
 	if !filepath.IsAbs(res) {
 		// join with base dir
-		res = filepath.Join(state.workingDir, res)
+		res = filepath.Join(state.WorkingDir, res)
 	}
 	// now convert to an absolute path again
 	res, pathErr = filepath.Abs(res)
@@ -249,7 +263,7 @@ func getPath(state *replState, path string) (string, error) {
 	return res, nil
 }
 
-func helpCommand(state *replState, args ...string) bool {
+func helpCommand(state *ExecutorState, args ...string) bool {
 	fmt.Println("The gomosaic generator runs in REPL mode, meaning you can" +
 		"interactively generate mosaics by entering commands")
 	fmt.Println("A list of commands follows")
@@ -261,19 +275,19 @@ func helpCommand(state *replState, args ...string) bool {
 	return true
 }
 
-func exitCommand(state *replState, args ...string) bool {
+func exitCommand(state *ExecutorState, args ...string) bool {
 	fmt.Println("Exiting gomosaic. Good bye!")
 	os.Exit(0)
 	// ereturn is requred
 	return true
 }
 
-func pwdCommand(state *replState, args ...string) bool {
-	fmt.Println(state.workingDir)
+func pwdCommand(state *ExecutorState, args ...string) bool {
+	fmt.Println(state.WorkingDir)
 	return true
 }
 
-func cdCommand(state *replState, args ...string) bool {
+func cdCommand(state *ExecutorState, args ...string) bool {
 	if len(args) != 1 {
 		return false
 	}
@@ -293,7 +307,7 @@ func cdCommand(state *replState, args ...string) bool {
 			if absErr != nil {
 				fmt.Println("Error: Chaning directory failed:", absErr)
 			} else {
-				state.workingDir = abs
+				state.WorkingDir = abs
 			}
 		} else {
 			fmt.Println("Error: Not a directory:", path)
@@ -302,16 +316,16 @@ func cdCommand(state *replState, args ...string) bool {
 	return true
 }
 
-func imageStorage(state *replState, args ...string) bool {
+func imageStorage(state *ExecutorState, args ...string) bool {
 	switch {
 	case len(args) == 0:
-		fmt.Println("Number of database images:", state.fsMapper.Len())
+		fmt.Println("Number of database images:", state.Mapper.Len())
 		return true
 	case args[0] == "list":
-		for _, path := range state.fsMapper.IDMapping {
+		for _, path := range state.Mapper.IDMapping {
 			fmt.Printf("  %s\n", path)
 		}
-		fmt.Println("Total:", state.fsMapper.Len())
+		fmt.Println("Total:", state.Mapper.Len())
 		return true
 	case args[0] == "load":
 		var dir string
@@ -319,7 +333,7 @@ func imageStorage(state *replState, args ...string) bool {
 
 		switch {
 		case len(args) == 1:
-			dir = state.workingDir
+			dir = state.WorkingDir
 		case len(args) > 2:
 			// parse recursive flag
 			var boolErr error
@@ -345,13 +359,13 @@ func imageStorage(state *replState, args ...string) bool {
 		if recursive {
 			fmt.Println("Recursive mode enabled")
 		}
-		state.fsMapper.Clear()
-		if loadErr := state.fsMapper.Load(dir, recursive, gomosaic.JPGAndPNG); loadErr != nil {
+		state.Mapper.Clear()
+		if loadErr := state.Mapper.Load(dir, recursive, gomosaic.JPGAndPNG); loadErr != nil {
 			fmt.Println("Error: Can't read image list:", loadErr)
 			fmt.Println("Clearing the storage, including images previously added")
-			state.fsMapper.Clear()
+			state.Mapper.Clear()
 		} else {
-			fmt.Println("Successfully read", state.fsMapper.Len(), "images")
+			fmt.Println("Successfully read", state.Mapper.Len(), "images")
 			fmt.Println("Don't forget to (re)load precomputed data if required!")
 		}
 		return true
@@ -360,7 +374,46 @@ func imageStorage(state *replState, args ...string) bool {
 	}
 }
 
-func repl(state *replState) {
+func gchCommand(state *ExecutorState, args ...string) bool {
+	switch {
+	case len(args) == 0:
+		return false
+	case args[0] == "create":
+		// k is the number of subdivions, defaults to 8
+		var k uint = 8
+		if len(args) > 1 {
+			asInt, parseErr := strconv.Atoi(args[1])
+			if parseErr != nil {
+				return false
+			}
+			// validate k: must be >= 1 and <= 256
+			if asInt < 1 || asInt > 256 {
+				return false
+			}
+			k = uint(asInt)
+		}
+
+		// create all histograms
+		fmt.Printf("Creating histograms for all images in storage with k = %d sub-divisions\n", k)
+		var progress gomosaic.ProgressFunc
+		if state.Verbose {
+			progress = gomosaic.StdProgressFunc("", int(state.ImgStorage.NumImages()), 100)
+		}
+		histograms, histErr := gomosaic.CreateAllHistograms(state.ImgStorage,
+			true, k, state.NumRoutines, progress)
+		if histErr != nil {
+			fmt.Println("Error: Can't create histograms:", histErr)
+			return true
+		}
+		fmt.Printf("Computed %d histograms\n", len(histograms))
+		return true
+	default:
+		return false
+	}
+
+}
+
+func repl(state *ExecutorState) {
 	fmt.Println("Welcome to the gomosaic generator")
 	fmt.Println("Copyright © 2018 Fabian Wenzelmann")
 	fmt.Println()

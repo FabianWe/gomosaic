@@ -15,6 +15,8 @@
 package gomosaic
 
 import (
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -48,7 +50,13 @@ func ProgressIgnore(num int) {}
 // step = 100 every 100 items).
 func LoggerProgressFunc(prefix string, max, step int) ProgressFunc {
 	return func(num int) {
+		if step == 0 {
+			return
+		}
 		if !(step < 0 || num%step == 0) {
+			return
+		}
+		if max == 0 {
 			return
 		}
 		percent := (float64(num) / float64(max)) * 100.0
@@ -59,6 +67,34 @@ func LoggerProgressFunc(prefix string, max, step int) ProgressFunc {
 			log.Printf("Progress: %d of %d (%.1f%%)", num, max, percent)
 		} else {
 			log.Printf("%s: %d of %d (%.1f%%)", prefix, num, max, percent)
+		}
+	}
+}
+
+// StdProgressFunc is a parameterized ProgressFunc that logs to stdout.
+// The output describes the progress (how many of how many objects processed).
+// Log messages may have an addition prefix. max is the total number of elements
+// to process and step describes how often to print to the log (for example
+// step = 100 every 100 items).
+func StdProgressFunc(prefix string, max, step int) ProgressFunc {
+	return func(num int) {
+		if step == 0 {
+			return
+		}
+		if !(step < 0 || num%step == 0) {
+			return
+		}
+		if max == 0 {
+			return
+		}
+		percent := (float64(num) / float64(max)) * 100.0
+		if percent > 100.0 {
+			percent = 100.0
+		}
+		if prefix == "" {
+			fmt.Printf("Progress: %d of %d (%.1f%%)\n", num, max, percent)
+		} else {
+			fmt.Printf("%s: %d of %d (%.1f%%)\n", prefix, num, max, percent)
 		}
 	}
 }
