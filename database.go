@@ -279,13 +279,34 @@ func (db FSImageDB) LoadConfig(id ImageID) (image.Config, error) {
 // HistogramFSEntry is used to store a histogram on the filesystem.
 // It contains the path of the image the histogram was created for as well
 // as the histogram data.
+//
+// It also has a field checksum that is not used yet. Later it can be adjusted
+// s.t. an histgram is stored together with the checksum (e.g. just plain md5
+// encoded with e.g. base64) of the image the histogram was created for.
+// This way we can test if the content of an image has changed, and thus
+// the histogram became invalid. At the moment we don't recognize if an image
+// has changed.
+//
+// This is however not supported at the moment. An empty string signals that
+// no checksum was computed.
 type HistogramFSEntry struct {
 	Path      string
 	Histogram *Histogram
+	Checksum  string
 }
 
 // HistogramFSController is used to store histograms (wrapped by
 // HistogramFSEntry) on the filesystem.
+//
+// Its intended use is to write an instance to a file (or whatever), making
+// it possible to safe histograms connected to a named image (path).
+//
+// The idea is: Load histogram data from the filesystem and transform the
+// histograms to HistogramStorage, maybe perform some tests if all images
+// in the database are present in the controller.
+//
+// See MissingEntries, AddtionalEntries and MemHistStorageFromFSMapper for
+// some examples.
 type HistogramFSController struct {
 	Entries []HistogramFSEntry
 	K       uint
@@ -300,7 +321,10 @@ func NewHistogramFSController(capacity int, k uint) *HistogramFSController {
 	if capacity < 0 {
 		capacity = 100
 	}
-	return &HistogramFSController{Entries: make([]HistogramFSEntry, 0, capacity), K: k}
+	return &HistogramFSController{
+		Entries: make([]HistogramFSEntry, 0, capacity),
+		K:       k,
+	}
 }
 
 // CreateHistFSController creates a histogram filesystem controller given
@@ -497,6 +521,9 @@ type MemoryHistStorage struct {
 	K          uint
 }
 
+// NewMemoryHistStorage returns a new memory histogram storage storing
+// histograms with k sub-divisons. Capacity is the capacity of the underlying
+// histogram array, negative values yield to a default capacity.
 func NewMemoryHistStorage(k uint, capacity int) *MemoryHistStorage {
 	if capacity < 0 {
 		capacity = 100
@@ -507,18 +534,60 @@ func NewMemoryHistStorage(k uint, capacity int) *MemoryHistStorage {
 	}
 }
 
+// GetHistogram implements the HistogramStorage interface method by return
+// the histogram on position id in the list.
+// If id is not a valid position inside the the list an error is returned.
 func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
-	if int(id) >= len(s.Histograms) {
+	if int(id) < 0 || int(id) >= len(s.Histograms) {
 		return nil, fmt.Errorf("Histogram for id %d not registered", id)
 	}
 	return s.Histograms[id], nil
 }
 
-func MemHistStorageFromFSMapper(mapper *FSMapper, fileContent *HistogramFSController) (*Histogram, error) {
-	// first we create a map
-	return nil, nil
-}
-
+// Divisions returns the number of sub-divisions k.
 func (s *MemoryHistStorage) Divisions() uint {
 	return s.K
+}
+
+// TODO provide example sticking this all together
+
+// MemHistStorageFromFSMapper creates a new memory histogram storage that
+// contains an entry for each image describec by the filesystem mapper.
+// If no histogram for an image is found an error is returned. An error
+// is also returned if there is an invalid histogram (wrong k, wrong size
+// of entries).
+//
+// HistMap is the map as computed by the Map() function of the histogram
+// controller. It is an argument to avoid multiple compoutations of it if used
+// more often. Just set it to nil and it will be computed with the map function.
+func MemHistStorageFromFSMapper(mapper *FSMapper, fileContent *HistogramFSController,
+	histMap map[string]*Histogram) (*MemoryHistStorage, error) {
+	// first create the mapping filename -> histogram
+	if histMap == nil {
+		histMap = fileContent.Map()
+	}
+	res := NewMemoryHistStorage(fileContent.K, mapper.Len())
+	// now add each histogram to the result, if no histogram exists return
+	// an error
+	for _, imagePath := range mapper.IDMapping {
+		// now look up the histogram
+		if histogram, has := histMap[imagePath]; has {
+			res.Histograms = append(res.Histograms, histogram)
+			// this is just a check to be sure only legal histograms are saved
+			k := histogram.K
+			if k != fileContent.K {
+				return nil, fmt.Errorf("Invalid histogram for image \"%s\": Illegal dimension: %d != %d",
+					imagePath, histogram.K, fileContent.K)
+			}
+			if (k * k * k) != uint(len(histogram.Entries)) {
+				return nil,
+					fmt.Errorf("Invalid histogram for image \"%s\": Not the correct number of entries in histogram",
+						imagePath)
+			}
+		} else {
+			// return error
+			return nil, fmt.Errorf("No histogram for image \"%s\" found", imagePath)
+		}
+	}
+	return res, nil
 }
