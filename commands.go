@@ -416,7 +416,6 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 		switch {
 		case len(args) == 1:
 			dir = state.WorkingDir
-			return nil
 		case len(args) > 2:
 			// parse recursive flag
 			var boolErr error
@@ -433,7 +432,6 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 			if pathErr != nil {
 				return pathErr
 			}
-			return nil
 		default:
 			// just to be sure, should never happen
 			return nil
