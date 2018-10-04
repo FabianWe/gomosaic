@@ -498,6 +498,29 @@ func (c *HistogramFSController) AddtionalEntries(m *FSMapper) []string {
 	return res
 }
 
+// Remove removes all entries from the controller whose path is in the paths
+// element. Example usage: Use AddtionalEntries to compute histograms that are
+// probably not required any more and then Remove them.
+func (c *HistogramFSController) Remove(paths []string) {
+	asSet := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		asSet[path] = struct{}{}
+	}
+	newSize := len(c.Entries) - len(paths)
+	if newSize < 0 {
+		newSize = 0
+	}
+	newEntries := make([]HistogramFSEntry, 0, newSize)
+	for _, entry := range c.Entries {
+		// test if path is in the elements to remove, if so don't append, otherwise
+		// append to new entries
+		if _, toRemove := asSet[entry.Path]; !toRemove {
+			newEntries = append(newEntries, entry)
+		}
+	}
+	c.Entries = newEntries
+}
+
 // GCHFileName returns the proposed filename for a file containing global
 // color histograms.
 // When saving HistogramFSController instances (that's the type used for storing
