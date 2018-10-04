@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"time"
 
 	homedir "github.com/mitchellh/go-homedir"
 )
@@ -57,9 +58,10 @@ type ExecutorState struct {
 	// mosaic generation.
 	NumRoutines int
 
-	// HistController is used to read and write histograms from the filesystem
-	// and to sync content with the image storage.
-	HistController *HistogramFSController
+	// GCHStorage stores the global color histograms. Whenever new images are
+	// loaded the old histograms become invalid (set to nil again) and must
+	// be reloaded.
+	GCHStorage *MemoryHistStorage
 
 	// Verbose is true if detailed output should be generated.
 	Verbose bool
@@ -447,8 +449,12 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 			}
 		}
 		state.Mapper.Clear()
+		// make gchs invalid
+		state.GCHStorage = nil
 		if loadErr := state.Mapper.Load(dir, recursive, JPGAndPNG); loadErr != nil {
 			state.Mapper.Clear()
+			// should not be necessary, just to follow the pattern
+			state.GCHStorage = nil
 			return loadErr
 		}
 		_, writeErr = fmt.Fprintln(state.Out, "Successfully read", state.Mapper.Len(), "images")
@@ -492,13 +498,52 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 		if state.Verbose {
 			progress = StdProgressFunc(state.Out, "", int(state.ImgStorage.NumImages()), 100)
 		}
+		start := time.Now()
 		histograms, histErr := CreateAllHistograms(state.ImgStorage,
 			true, k, state.NumRoutines, progress)
+		execTime := time.Since(start)
 		if histErr != nil {
 			return histErr
 		}
-		_, writeErr = fmt.Fprintf(state.Out, "Computed %d histograms\n", len(histograms))
+		// set histograms
+		state.GCHStorage = &MemoryHistStorage{Histograms: histograms, K: k}
+		_, writeErr = fmt.Fprintf(state.Out, "Computed %d histograms in %v\n", len(histograms), execTime)
 		return writeErr
+	case args[0] == "save":
+		if state.GCHStorage == nil {
+			return errors.New("No GCHs loaded yet")
+		}
+		// save ~/bla.[json|gob]
+		// save ~/
+		if len(args) < 2 {
+			return ErrCmdSyntaxErr
+		}
+		path, pathErr := state.GetPath(args[1])
+		if pathErr != nil {
+			return pathErr
+		}
+		// check if path is a file or directory
+		// we don't report the fiErr (this is not nil if file doesn't exist which
+		// is of course allowed)
+		fi, fiErr := os.Lstat(path)
+		if fiErr == nil && fi.IsDir() {
+			// save with default naming scheme in that directory
+			name := GCHFileName(state.GCHStorage.K, "gob")
+			path = filepath.Join(path, name)
+		}
+		controller, creationErr := CreateHistFSController(IDList(state.ImgStorage),
+			state.Mapper, state.GCHStorage)
+		if creationErr != nil {
+			return creationErr
+		}
+		// save file
+		saveErr := controller.WriteFile(path)
+		if saveErr == nil {
+			// ignore write error here
+			fmt.Fprintln(state.Out, "Successfuly wrote", state.ImgStorage.NumImages(), "histograms",
+				"to", path)
+		}
+		return saveErr
 	default:
 		return ErrCmdSyntaxErr
 	}
@@ -562,14 +607,14 @@ func (h ReplHandler) Init() *ExecutorState {
 	mapper := NewFSMapper()
 	return &ExecutorState{
 		// dir is always an absolute path
-		WorkingDir:     dir,
-		NumRoutines:    initialRoutines,
-		Mapper:         mapper,
-		ImgStorage:     NewFSImageDB(mapper),
-		HistController: nil,
-		Verbose:        true,
-		In:             os.Stdin,
-		Out:            os.Stdout,
+		WorkingDir:  dir,
+		NumRoutines: initialRoutines,
+		Mapper:      mapper,
+		ImgStorage:  NewFSImageDB(mapper),
+		GCHStorage:  nil,
+		Verbose:     true,
+		In:          os.Stdin,
+		Out:         os.Stdout,
 	}
 }
 

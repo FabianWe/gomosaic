@@ -84,7 +84,7 @@ func main() {
 	if readErr != nil {
 		log.Fatal(readErr)
 	}
-	writeErr = fsController.WiteJSONFile(filepath.Join(path, "hists.json"))
+	writeErr = fsController.WriteJSON(filepath.Join(path, "hists.json"))
 	if writeErr != nil {
 		log.Fatal(writeErr)
 	}

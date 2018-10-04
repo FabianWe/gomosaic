@@ -22,3 +22,10 @@
 // It ships with a executable program to generate mosaic images and administrate
 // image databases on the filesystem.
 package gomosaic
+
+// TODO There are some functions that run loads of things concurrently
+// and report back errors. however even if there was an error they continue
+// running until all elements are processed, stop them if an error was found?
+// What comes to my mind is to simply write a nil error back because we already
+// have an error. This way we iterate all elements but we don't do any
+// computations

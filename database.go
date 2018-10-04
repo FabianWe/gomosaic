@@ -381,8 +381,8 @@ func (c *HistogramFSController) ReadGobFile(path string) error {
 	return err
 }
 
-// WiteJSONFile writes the histograms to  a file encoded in json format.
-func (c *HistogramFSController) WiteJSONFile(path string) error {
+// WriteJSON writes the histograms to  a file encoded in json format.
+func (c *HistogramFSController) WriteJSON(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -404,6 +404,37 @@ func (c *HistogramFSController) ReadJSONFile(path string) error {
 	dec := json.NewDecoder(f)
 	err = dec.Decode(c)
 	return err
+}
+
+// ReadFile reads the content of the controller from the specified file.
+// The read method depends on the file extension which must be either .json
+// or .gob.
+func (c *HistogramFSController) ReadFile(path string) error {
+	ext := filepath.Ext(path)
+	ext = strings.ToLower(ext)
+	switch ext {
+	case ".json":
+		return c.ReadJSONFile(path)
+	case ".gob":
+		return c.ReadGobFile(path)
+	default:
+		return fmt.Errorf("Unkown file extension for GCH file: %s. Should be \".json\" or \".gob\"", ext)
+	}
+}
+
+// WriteFile writes the content of the controller to a file depending on the
+// file extension hich must be either .json or .gob.
+func (c *HistogramFSController) WriteFile(path string) error {
+	ext := filepath.Ext(path)
+	ext = strings.ToLower(ext)
+	switch ext {
+	case ".json":
+		return c.WriteJSON(path)
+	case ".gob":
+		return c.WriteGobFile(path)
+	default:
+		return fmt.Errorf("Unkown file extension for GCH file: %s. Should be \".json\" or \".gob\"", ext)
+	}
 }
 
 // CheckData is used to verify (parts) of the controller data. It tests if
@@ -534,6 +565,9 @@ func (c *HistogramFSController) Remove(paths []string) {
 //
 // Using this scheme makes it easier to find the precomputed data.
 func GCHFileName(k uint, ext string) string {
+	if strings.HasPrefix(ext, ".") {
+		ext = ext[1:]
+	}
 	return fmt.Sprintf("gch-%d.%s", k, ext)
 }
 
