@@ -15,11 +15,16 @@
 package gomosaic
 
 import (
+	"bufio"
 	"errors"
 	"io"
 	"path/filepath"
 
 	homedir "github.com/mitchellh/go-homedir"
+)
+
+var (
+	ErrCmdSyntaxErr = errors.New("Invalid command syntax")
 )
 
 type ExecutorState struct {
@@ -29,6 +34,9 @@ type ExecutorState struct {
 	NumRoutines    int
 	HistController *HistogramFSController
 	Verbose        bool
+
+	In  io.Reader
+	Out io.Writer
 }
 
 func (state *ExecutorState) GetPath(path string) (string, error) {
@@ -63,11 +71,56 @@ type Command struct {
 }
 
 type CommandHandler interface {
-	Init(s *ExecutorState)
+	Init() *ExecutorState
+	Start(s *ExecutorState)
 	Before(s *ExecutorState)
-	OnSuccess(s *ExecutorState)
-	OnFailure(s *ExecutorState)
-	Out() io.Writer
+	OnParseErr(s *ExecutorState, err error) bool
+	OnInvalidCmd(s *ExecutorState, cmd string) bool
+	OnSuccess(s *ExecutorState, cmd Command)
+	OnError(s *ExecutorState, err error, cmd Command) bool
+}
+
+func Execute(handler CommandHandler) {
+	state := handler.Init()
+	handler.Start(state)
+	scanner := bufio.NewScanner(state.In)
+	for scanner.Scan() {
+		handler.Before(state)
+		line := scanner.Text()
+		parsedCmd, parseErr := ParseCommand(line)
+		if parseErr != nil {
+			if !handler.OnParseErr(state, parseErr) {
+				return
+			}
+			continue
+		}
+		if len(parsedCmd) == 0 {
+			continue
+		}
+		cmd := parsedCmd[0]
+		if nextCmd, ok := commandMap[cmd]; ok {
+			// try to execute
+			if nextCmd.Exec(state, parsedCmd[1:]...) {
+				// execution of command was a success
+				handler.OnSuccess(state, nextCmd)
+			} else {
+				// execution of command failed
+				// TODO insert error here
+				if !handler.OnError(state, errors.New("TODO"), nextCmd) {
+					return
+				}
+				// continue with next
+				continue
+			}
+		} else {
+			// we got an invalid command
+			if !handler.OnInvalidCmd(state, cmd) {
+				return
+			}
+			// continue with next command
+			continue
+		}
+	}
 }
 
 func isEOF(r []rune, i int) bool {
