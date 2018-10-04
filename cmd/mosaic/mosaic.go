@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	// Since we're not in the gomosaic package we have to import it
 	"github.com/FabianWe/gomosaic"
 
@@ -43,9 +44,15 @@ func main() {
 		// don't know if this can happen, better safe then sorry
 		initialRoutines = 4
 	}
+	dir, err := filepath.Abs(".")
+	if err != nil {
+		fmt.Println("Error: Unable to retrieve path:", err)
+		os.Exit(1)
+	}
 	if len(os.Args) == 1 {
 		repl(&replState{
-			workingDir:  ".",
+			// dir is always an absolute path
+			workingDir:  dir,
 			numRoutines: initialRoutines,
 			fsMapper:    gomosaic.NewFSMapper(),
 		})
@@ -205,24 +212,52 @@ func init() {
 		usage:       "cd <DIR>",
 		description: "Change working directory to the specified directory",
 	}
-	commandMap["image-info"] = replCommand{
-		exec:  imageInfo,
-		usage: "image-info [\"list\"]",
-		description: "Show information about the images that are considered" +
+	commandMap["storage"] = replCommand{
+		exec:  imageStorage,
+		usage: "storage [list] or storage load [DIR]",
+		description: "This command controls the images that are considered" +
 			"database images. This does not mean that all these images have some" +
 			"precomputed data, like histograms. Only that they were found as" +
 			"possible images. You have to use other commands to load precomputed" +
-			"data.\n\nIf \"list\" is provided a list of all images will be printed" +
-			"note that this can be quite large",
+			"data.\n\nIf \"list\" is used a list of all images will be printed" +
+			"note that this can be quite large\n\n" +
+			"if load is used the image storage will be initialized with images from" +
+			"the directory (working directory if no image provided)",
 	}
+}
+
+func getPath(state *replState, path string) (string, error) {
+	var res string
+	// first extend with homedir
+	var pathErr error
+	res, pathErr = homedir.Expand(path)
+	if pathErr != nil {
+		return "", pathErr
+	}
+	// now we test if we have an absolute path or a relative path.
+	// if absolute path we don't need to do anything.
+	// if relative path we have to join with the base directory
+	if !filepath.IsAbs(res) {
+		// join with base dir
+		res = filepath.Join(state.workingDir, res)
+	}
+	// now convert to an absolute path again
+	res, pathErr = filepath.Abs(res)
+	if pathErr != nil {
+		return "", pathErr
+	}
+	return res, nil
 }
 
 func helpCommand(state *replState, args ...string) bool {
 	fmt.Println("The gomosaic generator runs in REPL mode, meaning you can" +
 		"interactively generate mosaics by entering commands")
 	fmt.Println("A list of commands follows")
-	fmt.Println()
-	fmt.Println("help - Show this help text")
+	for _, cmd := range commandMap {
+		fmt.Println()
+		fmt.Println("Usage:", cmd.usage)
+		fmt.Println(cmd.description)
+	}
 	return true
 }
 
@@ -234,12 +269,7 @@ func exitCommand(state *replState, args ...string) bool {
 }
 
 func pwdCommand(state *replState, args ...string) bool {
-	abs, absErr := filepath.Abs(state.workingDir)
-	if absErr != nil {
-		fmt.Println("Error:", absErr)
-		return true
-	}
-	fmt.Println(abs)
+	fmt.Println(state.workingDir)
 	return true
 }
 
@@ -258,7 +288,13 @@ func cdCommand(state *replState, args ...string) bool {
 		fmt.Println("Error: Changing directory failed:", err)
 	} else {
 		if fi.IsDir() {
-			state.workingDir = path
+			// convert to absolute path
+			abs, absErr := filepath.Abs(path)
+			if absErr != nil {
+				fmt.Println("Error: Chaning directory failed:", absErr)
+			} else {
+				state.workingDir = abs
+			}
 		} else {
 			fmt.Println("Error: Not a directory:", path)
 		}
@@ -266,16 +302,56 @@ func cdCommand(state *replState, args ...string) bool {
 	return true
 }
 
-func imageInfo(state *replState, args ...string) bool {
+func imageStorage(state *replState, args ...string) bool {
 	switch {
 	case len(args) == 0:
 		fmt.Println("Number of database images:", state.fsMapper.Len())
 		return true
 	case args[0] == "list":
 		for _, path := range state.fsMapper.IDMapping {
-			fmt.Printf("  %s", path)
+			fmt.Printf("  %s\n", path)
 		}
 		fmt.Println("Total:", state.fsMapper.Len())
+		return true
+	case args[0] == "load":
+		var dir string
+		var recursive bool
+
+		switch {
+		case len(args) == 1:
+			dir = state.workingDir
+		case len(args) > 2:
+			// parse recursive flag
+			var boolErr error
+			recursive, boolErr = strconv.ParseBool(args[2])
+			if boolErr != nil {
+				return false
+			}
+			// parse path argument
+			fallthrough
+		case len(args) > 1:
+			// parse the path
+			var pathErr error
+			dir, pathErr = getPath(state, args[1])
+			if pathErr != nil {
+				fmt.Println("Error: Can't get path:", pathErr)
+				return true
+			}
+		default:
+			// just to be sure, should never happen
+			return false
+		}
+		fmt.Println("Loading images from", dir)
+		if recursive {
+			fmt.Println("Recursive mode enabled")
+		}
+		state.fsMapper.Clear()
+		if loadErr := state.fsMapper.Load(dir, recursive, gomosaic.JPGAndPNG); loadErr != nil {
+			fmt.Println("Error: Can't read image list:", loadErr)
+		} else {
+			fmt.Println("Successfully read", state.fsMapper.Len(), "images")
+			fmt.Println("Don't forget to (re)load precomputed data if required!")
+		}
 		return true
 	default:
 		return false

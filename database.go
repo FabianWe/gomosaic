@@ -55,7 +55,7 @@ func NewFSMapper() *FSMapper {
 	}
 }
 
-// Clears removes all registered images from the mappings.
+// Clear removes all registered images from the mappings.
 func (m *FSMapper) Clear() {
 	m.NameMapping = make(map[string]ImageID)
 	m.IDMapping = nil
