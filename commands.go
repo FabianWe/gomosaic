@@ -28,6 +28,8 @@ import (
 )
 
 var (
+	// ErrCmdSyntaxErr is returned by a CommandFunc if the syntax for the command
+	// is invalid.
 	ErrCmdSyntaxErr = errors.New("Invalid command syntax")
 )
 
@@ -36,18 +38,48 @@ var (
 // But this is stuff for the future when more than images / histograms as
 // files are supported
 
+// ExecutorState is the state during a CommandHandler execution, see that
+// type for more details of the workflow.
+//
+// The variables in the state are shared among the executions of the command
+// functions.
 type ExecutorState struct {
-	WorkingDir     string
-	Mapper         *FSMapper
-	ImgStorage     *FSImageDB
-	NumRoutines    int
-	HistController *HistogramFSController
-	Verbose        bool
+	// WorkingDir is the current directory. It must always be an absolute path.
+	WorkingDir string
 
-	In  io.Reader
+	// Mapper is the current file system mapper.
+	Mapper *FSMapper
+
+	// ImgStorage is image database, backed by Mapper.
+	ImgStorage *FSImageDB
+
+	// NumRoutines is the number of go routines used for different tasks during
+	// mosaic generation.
+	NumRoutines int
+
+	// HistController is used to read and write histograms from the filesystem
+	// and to sync content with the image storage.
+	HistController *HistogramFSController
+
+	// Verbose is true if detailed output should be generated.
+	Verbose bool
+
+	// In is the source to read commands from (line by line).
+	In io.Reader
+
+	// Out is used to write state information.
 	Out io.Writer
 }
 
+// GetPath returns the absolute path given some other path.
+// The idea is the following: If the user inputs a path we have two cases:
+// The user used an absolute path, in this case we use this absolute path
+// to perform tasks with.
+// If it is a relative path we join the working directory with this path
+// and thus retrieve the absolute path we work on.
+//
+// The home directory can be used like on Unix: ~/Pictures is the Pictures
+// directory in the home directory of the user.
 func (state *ExecutorState) GetPath(path string) (string, error) {
 	var res string
 	// first extend with homedir
@@ -71,18 +103,58 @@ func (state *ExecutorState) GetPath(path string) (string, error) {
 	return res, nil
 }
 
+// CommandFunc is a function that is applied to the current states and
+// arguments to that command.
 type CommandFunc func(state *ExecutorState, args ...string) error
 
+// Command a command consists of a function to actually execute the command
+// and some information about the command.
 type Command struct {
 	Exec        CommandFunc
 	Usage       string
 	Description string
 }
 
+// CommandMap maps command names to Commands.
 type CommandMap map[string]Command
 
+// DefaultCommands contains some commands that are often used.
 var DefaultCommands CommandMap
 
+// CommandHandler together with Execute implements a high-level command
+// execution loop. CommandFuncs are applied to the current state until there
+// are no more commands to execute (no more input).
+//
+// We won't go into the details, please read the source for details (yes,
+// that's probably not the best practise but is so much easier in this case).
+//
+// A command has the form "COMMAND ARG1 ... ARGN" where COMMAND is the command
+// name and ARG1 to ARGN are the arguments for the command.
+//
+// Here's a rough summary of what Execute will do:
+// First it creates an initial state by calling Init. After that it immediately
+// calls Start to notify the handler that the execution begins.
+//
+// We use to different methods to separate object creation from execution.
+// Before a command is executed the Before method is called to notify the
+// handler that a command will be executed.
+//
+// Then a loop will begin that reads all lines from the state's reader.
+// If there is a command line the line will be parsed, if an error during
+// parsing occurred the handler gets notified via OnParseErr. This method
+// should return true if the execution should continue despite the error.
+// Then a lookup in the provided command man happens: If the command was
+// found the corresponding Command object is executed. If it was not found
+// the OnInvalidCmd function is called on the handler. Again it should return
+// true if the exeuction should continue despite the error. If this execution
+// was successful the OnSuccess function is called with the executed command.
+// If the execution was unsuccessful the OnError function will be called.
+// Commands should return ErrCmdSyntaxErr if the syntax of the command is
+// incorrect (for example invalid number of arguments) and OnError can do
+// special handling in this case. Again OnError returns true if execution should
+// continue.
+// OnScanErr is called if there is an error while reading a command line from
+// the state's reader.
 type CommandHandler interface {
 	Init() *ExecutorState
 	Start(s *ExecutorState)
@@ -95,6 +167,8 @@ type CommandHandler interface {
 	OnScanErr(s *ExecutorState, err error)
 }
 
+// Execute implements the high-level execution loop as described in the
+// documentation of CommandHandler. commandMap is used to lookup commands.
 func Execute(handler CommandHandler, commandMap CommandMap) {
 	state := handler.Init()
 	handler.Start(state)
@@ -152,11 +226,17 @@ func isEOF(r []rune, i int) bool {
 	return i == len(r)
 }
 
+// ParseCommand parses a command of the form "COMMAND ARG1 ... ARGN".
+// Examples:
+//
+// foo bar is the command "foo" with argument "bar". Arguments might also
+// be enclosed in quotes, so foo "bar bar" is parsed as command foo with
+// argument bar bar (a single argument).
 func ParseCommand(s string) ([]string, error) {
 	parseErr := errors.New("Error parsing command line")
 	res := make([]string, 0)
 	// basically this is an deterministic automaton, however I can't share my
-	// nice image
+	// "nice" image with you
 
 	// the following 3 variables mean:
 	// state is the state of the automaton, we have 5 states
@@ -263,11 +343,13 @@ L:
 	return res, nil
 }
 
+// PwdCommand is a command that prints the current working directory.
 func PwdCommand(state *ExecutorState, args ...string) error {
 	_, err := fmt.Fprintln(state.Out, state.WorkingDir)
 	return err
 }
 
+// CdCommand is a command that changes the current directory.
 func CdCommand(state *ExecutorState, args ...string) error {
 	if len(args) != 1 {
 		return ErrCmdSyntaxErr
@@ -296,7 +378,21 @@ func CdCommand(state *ExecutorState, args ...string) error {
 	}
 }
 
-// TODO doc that jpg and png are required
+// ImageStorageCommand is a command that executes tasks with the fs mapper
+// and therefor the image storage (the user doesn't need to know about details
+// as mapper and storage, so it's simply called storage).
+// This command without arguments just prints the number of databases in the
+// storage.
+// With the single argument "list" it prints the path of each image in the
+// storage.
+// With the argument "load" a second argument "DIR" is required, this will
+// load all images from the directory in the storage. If a third argument
+// is provided this must be a bool that is true if the directory should be
+// scanned recursively. The default is not to scan recursively.
+//
+// Note that jpg and png files are considered valid image types, thus
+// image.jpeg and image.png should be included if you're planning to use
+// this function.
 func ImageStorageCommand(state *ExecutorState, args ...string) error {
 	var writeErr error
 	switch {
@@ -366,6 +462,7 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 	}
 }
 
+// TODO doc when finished
 func GCHCommand(state *ExecutorState, args ...string) error {
 	switch {
 	case len(args) == 0:
@@ -443,9 +540,14 @@ func init() {
 	}
 }
 
+// ReplHandler implements CommandHandler by reading commands from stdin and
+// writing output to stdout.
 type ReplHandler struct{}
 
-// TODO doc that it might panic
+// Init creates an initial ExecutorState. It creates a new mapper and
+// image database and sets the working directory to the current directory.
+// This method might panic if something with filepath is wrong, this should
+// however usually not be the case.
 func (h ReplHandler) Init() *ExecutorState {
 	// seems reasonable
 	initialRoutines := runtime.NumCPU() * 2
@@ -496,7 +598,12 @@ func (h ReplHandler) OnInvalidCmd(s *ExecutorState, cmd string) bool {
 func (h ReplHandler) OnSuccess(s *ExecutorState, cmd Command) {}
 
 func (h ReplHandler) OnError(s *ExecutorState, err error, cmd Command) bool {
-	fmt.Println("Error while executing command:", err.Error())
+	if err == ErrCmdSyntaxErr {
+		fmt.Println("Invalid syntax for command.")
+		fmt.Println("Usage:", cmd.Usage)
+	} else {
+		fmt.Println("Error while executing command:", err.Error())
+	}
 	return true
 }
 
