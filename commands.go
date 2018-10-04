@@ -546,6 +546,19 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 		if readErr != nil {
 			return readErr
 		}
+		fmt.Fprintf(state.Out, "Read %d histograms\n", len(controller.Entries))
+		// we don't care about missing / new images, we just print a warning if
+		// the lengths have change.
+		if len(controller.Entries) != int(state.ImgStorage.NumImages()) {
+			fmt.Fprintln(state.Out, "Unmatched number of images in storage and loaded histograms.",
+				"Have the images changed? In this case the histograms must be re-computed.")
+		}
+		memStorage, createErr := MemHistStorageFromFSMapper(state.Mapper, &controller, nil)
+		if createErr != nil {
+			return createErr
+		}
+		state.GCHStorage = memStorage
+		fmt.Fprintln(state.Out, "Histograms have been mapped to image store.")
 		return nil
 	default:
 		return ErrCmdSyntaxErr
