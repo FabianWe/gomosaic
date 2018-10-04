@@ -14,7 +14,13 @@
 
 package gomosaic
 
-import "errors"
+import (
+	"errors"
+	"io"
+	"path/filepath"
+
+	homedir "github.com/mitchellh/go-homedir"
+)
 
 type ExecutorState struct {
 	WorkingDir     string
@@ -25,12 +31,43 @@ type ExecutorState struct {
 	Verbose        bool
 }
 
+func (state *ExecutorState) GetPath(path string) (string, error) {
+	var res string
+	// first extend with homedir
+	var pathErr error
+	res, pathErr = homedir.Expand(path)
+	if pathErr != nil {
+		return "", pathErr
+	}
+	// now we test if we have an absolute path or a relative path.
+	// if absolute path we don't need to do anything.
+	// if relative path we have to join with the base directory
+	if !filepath.IsAbs(res) {
+		// join with base dir
+		res = filepath.Join(state.WorkingDir, res)
+	}
+	// now convert to an absolute path again
+	res, pathErr = filepath.Abs(res)
+	if pathErr != nil {
+		return "", pathErr
+	}
+	return res, nil
+}
+
 type CommandFunc func(state *ExecutorState, args ...string) bool
 
 type Command struct {
 	Exec        CommandFunc
 	Usage       string
 	Description string
+}
+
+type CommandExecutor interface {
+	Init(s *ExecutorState)
+	Before(s *ExecutorState)
+	OnSuccess(s *ExecutorState)
+	OnFailure(s *ExecutorState)
+	Out() io.Writer
 }
 
 func isEOF(r []rune, i int) bool {
@@ -146,4 +183,55 @@ L:
 		res = append(res, string(currentArg))
 	}
 	return res, nil
+}
+
+var commandMap map[string]Command
+
+func RegisterCommand(name string, cmd Command) {
+	commandMap[name] = cmd
+}
+
+func init() {
+	// commandMap = make(map[string]Command, 20)
+	// commandMap["help"] = Command{
+	// 	Exec:        helpCommand,
+	// 	Usage:       "help",
+	// 	Description: "Show help.",
+	// }
+	// commandMap["exit"] = Command{
+	// 	Exec:        exitCommand,
+	// 	Usage:       "exit",
+	// 	Description: "Exit the program.",
+	// }
+	// commandMap["pwd"] = Command{
+	// 	Exec:        pwdCommand,
+	// 	Usage:       "pwd",
+	// 	Description: "Show current working directory.",
+	// }
+	// commandMap["cd"] = Command{
+	// 	Exec:        cdCommand,
+	// 	Usage:       "cd <DIR>",
+	// 	Description: "Change working directory to the specified directory",
+	// }
+	// commandMap["storage"] = Command{
+	// 	Exec:  imageStorage,
+	// 	Usage: "storage [list] or storage load [DIR]",
+	// 	Description: "This command controls the images that are considered" +
+	// 		"database images. This does not mean that all these images have some" +
+	// 		"precomputed data, like histograms. Only that they were found as" +
+	// 		"possible images. You have to use other commands to load precomputed" +
+	// 		"data.\n\nIf \"list\" is used a list of all images will be printed" +
+	// 		"note that this can be quite large\n\n" +
+	// 		"if load is used the image storage will be initialized with images from" +
+	// 		"the directory (working directory if no image provided)",
+	// }
+	// commandMap["gch"] = Command{
+	// 	Exec:  gchCommand,
+	// 	Usage: "gch create [k] or gch TODO",
+	// 	Description: "Used to administrate global color histograms (GCHs)\n\n" +
+	// 		"If \"create\" is used GCHs are created for all images in the current" +
+	// 		"storage. The optional argument k must be a number between 1 and 256." +
+	// 		"See usage documentation / Wiki for details about this value. 8 is the" +
+	// 		"default value and should be fine.",
+	// }
 }

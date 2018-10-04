@@ -107,29 +107,6 @@ func init() {
 	}
 }
 
-func getPath(state *gomosaic.ExecutorState, path string) (string, error) {
-	var res string
-	// first extend with homedir
-	var pathErr error
-	res, pathErr = homedir.Expand(path)
-	if pathErr != nil {
-		return "", pathErr
-	}
-	// now we test if we have an absolute path or a relative path.
-	// if absolute path we don't need to do anything.
-	// if relative path we have to join with the base directory
-	if !filepath.IsAbs(res) {
-		// join with base dir
-		res = filepath.Join(state.WorkingDir, res)
-	}
-	// now convert to an absolute path again
-	res, pathErr = filepath.Abs(res)
-	if pathErr != nil {
-		return "", pathErr
-	}
-	return res, nil
-}
-
 func helpCommand(state *gomosaic.ExecutorState, args ...string) bool {
 	fmt.Println("The gomosaic generator runs in REPL mode, meaning you can" +
 		"interactively generate mosaics by entering commands")
@@ -213,7 +190,7 @@ func imageStorage(state *gomosaic.ExecutorState, args ...string) bool {
 		case len(args) > 1:
 			// parse the path
 			var pathErr error
-			dir, pathErr = getPath(state, args[1])
+			dir, pathErr = state.GetPath(args[1])
 			if pathErr != nil {
 				fmt.Println("Error: Can't get path:", pathErr)
 				return true
