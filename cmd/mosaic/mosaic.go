@@ -16,7 +16,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
@@ -45,7 +44,7 @@ func main() {
 	}
 	if len(os.Args) == 1 {
 		mapper := gomosaic.NewFSMapper()
-		repl(&ExecutorState{
+		repl(&gomosaic.ExecutorState{
 			// dir is always an absolute path
 			WorkingDir:     dir,
 			NumRoutines:    initialRoutines,
@@ -57,170 +56,38 @@ func main() {
 	}
 }
 
-type ExecutorState struct {
-	WorkingDir     string
-	Mapper         *gomosaic.FSMapper
-	ImgStorage     *gomosaic.FSImageDB
-	NumRoutines    int
-	HistController *gomosaic.HistogramFSController
-	Verbose        bool
-}
-
-type CommandFunc func(state *ExecutorState, args ...string) bool
-
-type Command struct {
-	exec        CommandFunc
-	usage       string
-	description string
-}
-
-func isEOF(r []rune, i int) bool {
-	return i == len(r)
-}
-
-func parseCommand(s string) ([]string, error) {
-	parseErr := errors.New("Error parsing command line")
-	res := make([]string, 0)
-	// basically this is an deterministic automaton, however I can't share my
-	// nice image
-
-	// the following 3 variables mean:
-	// state is the state of the automaton, we have 5 states
-	// i is the index in the position in s in which to apply the state function
-	// start is the start of the argument (when we're finished parsing one)
-	// however, we don't work on the string but on runes
-	r := []rune(s)
-	state, i := 0, 0
-	// while parsing runes get appended here to build the current argument
-	currentArg := make([]rune, 0)
-	// now iterate over each rune
-L:
-	for ; i <= len(r); i++ {
-		switch state {
-		case 0:
-			// state when we parse a new command, that means currentArg must be empty
-			if isEOF(r, i) {
-				// done parsing
-				break L
-			}
-			switch r[i] {
-			case ' ':
-				// do nothing, just remain in state
-			case '\\':
-				state = 2
-			case '"':
-				state = 3
-			default:
-				currentArg = append(currentArg, r[i])
-				state = 1
-			}
-		case 1:
-			// state where we parse an argument not enclosed in ""
-			if isEOF(r, i) {
-				break L
-			}
-			switch r[i] {
-			case ' ':
-				// parsing done
-				res = append(res, string(currentArg))
-				currentArg = nil
-				state = 0
-			case '\\':
-				state = 2
-			case '"':
-				return nil, parseErr
-			default:
-				//remain in state, append rune
-				currentArg = append(currentArg, r[i])
-			}
-		case 2:
-			// state where we previously parsed a \, so know we must parse either "
-			// \
-			if isEOF(r, i) {
-				return nil, parseErr
-			}
-			switch r[i] {
-			case '\\', '"':
-				// add to current arg and switch back to state 1
-				currentArg = append(currentArg, r[i])
-				state = 1
-			default:
-				return nil, parseErr
-			}
-		case 3:
-			// state where we parse an argument enclosed in ""
-			if isEOF(r, i) {
-				return nil, parseErr
-			}
-			switch r[i] {
-			case '"':
-				// parsing done
-				res = append(res, string(currentArg))
-				currentArg = nil
-				state = 0
-			case '\\':
-				state = 4
-			default:
-				currentArg = append(currentArg, r[i])
-			}
-		case 4:
-			// state where we previously parsed a \, so know we must parse either "
-			// \
-			// Similar to state 2, but know we reached the state from an arg
-			// enclosed in ""
-			if isEOF(r, i) {
-				return nil, parseErr
-			}
-			switch r[i] {
-			case '\\', '"':
-				// add to current arg and switch back to state 3
-				currentArg = append(currentArg, r[i])
-				state = 3
-			default:
-				return nil, parseErr
-			}
-		}
-	}
-	// now something might still be there (just a break in the loop, not adding
-	// to res)
-	if len(currentArg) > 0 {
-		res = append(res, string(currentArg))
-	}
-	return res, nil
-}
-
-var commandMap map[string]Command
+var commandMap map[string]gomosaic.Command
 
 func init() {
 	if gomosaic.Debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	commandMap = make(map[string]Command, 20)
-	commandMap["help"] = Command{
-		exec:        helpCommand,
-		usage:       "help",
-		description: "Show help.",
+	commandMap = make(map[string]gomosaic.Command, 20)
+	commandMap["help"] = gomosaic.Command{
+		Exec:        helpCommand,
+		Usage:       "help",
+		Description: "Show help.",
 	}
-	commandMap["exit"] = Command{
-		exec:        exitCommand,
-		usage:       "exit",
-		description: "Exit the program.",
+	commandMap["exit"] = gomosaic.Command{
+		Exec:        exitCommand,
+		Usage:       "exit",
+		Description: "Exit the program.",
 	}
-	commandMap["pwd"] = Command{
-		exec:        pwdCommand,
-		usage:       "pwd",
-		description: "Show current working directory.",
+	commandMap["pwd"] = gomosaic.Command{
+		Exec:        pwdCommand,
+		Usage:       "pwd",
+		Description: "Show current working directory.",
 	}
-	commandMap["cd"] = Command{
-		exec:        cdCommand,
-		usage:       "cd <DIR>",
-		description: "Change working directory to the specified directory",
+	commandMap["cd"] = gomosaic.Command{
+		Exec:        cdCommand,
+		Usage:       "cd <DIR>",
+		Description: "Change working directory to the specified directory",
 	}
-	commandMap["storage"] = Command{
-		exec:  imageStorage,
-		usage: "storage [list] or storage load [DIR]",
-		description: "This command controls the images that are considered" +
+	commandMap["storage"] = gomosaic.Command{
+		Exec:  imageStorage,
+		Usage: "storage [list] or storage load [DIR]",
+		Description: "This command controls the images that are considered" +
 			"database images. This does not mean that all these images have some" +
 			"precomputed data, like histograms. Only that they were found as" +
 			"possible images. You have to use other commands to load precomputed" +
@@ -229,10 +96,10 @@ func init() {
 			"if load is used the image storage will be initialized with images from" +
 			"the directory (working directory if no image provided)",
 	}
-	commandMap["gch"] = Command{
-		exec:  gchCommand,
-		usage: "gch create [k] or gch TODO",
-		description: "Used to administrate global color histograms (GCHs)\n\n" +
+	commandMap["gch"] = gomosaic.Command{
+		Exec:  gchCommand,
+		Usage: "gch create [k] or gch TODO",
+		Description: "Used to administrate global color histograms (GCHs)\n\n" +
 			"If \"create\" is used GCHs are created for all images in the current" +
 			"storage. The optional argument k must be a number between 1 and 256." +
 			"See usage documentation / Wiki for details about this value. 8 is the" +
@@ -240,7 +107,7 @@ func init() {
 	}
 }
 
-func getPath(state *ExecutorState, path string) (string, error) {
+func getPath(state *gomosaic.ExecutorState, path string) (string, error) {
 	var res string
 	// first extend with homedir
 	var pathErr error
@@ -263,31 +130,31 @@ func getPath(state *ExecutorState, path string) (string, error) {
 	return res, nil
 }
 
-func helpCommand(state *ExecutorState, args ...string) bool {
+func helpCommand(state *gomosaic.ExecutorState, args ...string) bool {
 	fmt.Println("The gomosaic generator runs in REPL mode, meaning you can" +
 		"interactively generate mosaics by entering commands")
 	fmt.Println("A list of commands follows")
 	for _, cmd := range commandMap {
 		fmt.Println()
-		fmt.Println("Usage:", cmd.usage)
-		fmt.Println(cmd.description)
+		fmt.Println("Usage:", cmd.Usage)
+		fmt.Println(cmd.Description)
 	}
 	return true
 }
 
-func exitCommand(state *ExecutorState, args ...string) bool {
+func exitCommand(state *gomosaic.ExecutorState, args ...string) bool {
 	fmt.Println("Exiting gomosaic. Good bye!")
 	os.Exit(0)
 	// ereturn is requred
 	return true
 }
 
-func pwdCommand(state *ExecutorState, args ...string) bool {
+func pwdCommand(state *gomosaic.ExecutorState, args ...string) bool {
 	fmt.Println(state.WorkingDir)
 	return true
 }
 
-func cdCommand(state *ExecutorState, args ...string) bool {
+func cdCommand(state *gomosaic.ExecutorState, args ...string) bool {
 	if len(args) != 1 {
 		return false
 	}
@@ -316,7 +183,7 @@ func cdCommand(state *ExecutorState, args ...string) bool {
 	return true
 }
 
-func imageStorage(state *ExecutorState, args ...string) bool {
+func imageStorage(state *gomosaic.ExecutorState, args ...string) bool {
 	switch {
 	case len(args) == 0:
 		fmt.Println("Number of database images:", state.Mapper.Len())
@@ -374,7 +241,7 @@ func imageStorage(state *ExecutorState, args ...string) bool {
 	}
 }
 
-func gchCommand(state *ExecutorState, args ...string) bool {
+func gchCommand(state *gomosaic.ExecutorState, args ...string) bool {
 	switch {
 	case len(args) == 0:
 		return false
@@ -413,7 +280,7 @@ func gchCommand(state *ExecutorState, args ...string) bool {
 
 }
 
-func repl(state *ExecutorState) {
+func repl(state *gomosaic.ExecutorState) {
 	fmt.Println("Welcome to the gomosaic generator")
 	fmt.Println("Copyright © 2018 Fabian Wenzelmann")
 	fmt.Println()
@@ -428,7 +295,7 @@ func repl(state *ExecutorState) {
 				fmt.Print(">>> ")
 			}()
 			line := scanner.Text()
-			parsedCmd, parseErr := parseCommand(line)
+			parsedCmd, parseErr := gomosaic.ParseCommand(line)
 			if parseErr != nil {
 				fmt.Println("Syntax error")
 				return
@@ -438,9 +305,9 @@ func repl(state *ExecutorState) {
 			}
 			cmd := parsedCmd[0]
 			if replCmd, ok := commandMap[cmd]; ok {
-				if !replCmd.exec(state, parsedCmd[1:]...) {
+				if !replCmd.Exec(state, parsedCmd[1:]...) {
 					fmt.Println("Invalid command syntax")
-					fmt.Println("Usage:", replCmd.usage)
+					fmt.Println("Usage:", replCmd.Usage)
 				}
 			} else {
 				fmt.Printf("Unknown command \"%s\"\n", cmd)
