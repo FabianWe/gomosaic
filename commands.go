@@ -78,6 +78,7 @@ type CommandHandler interface {
 	OnInvalidCmd(s *ExecutorState, cmd string) bool
 	OnSuccess(s *ExecutorState, cmd Command)
 	OnError(s *ExecutorState, err error, cmd Command) bool
+	OnScanErr(s *ExecutorState, err error)
 }
 
 func Execute(handler CommandHandler) {
@@ -120,6 +121,9 @@ func Execute(handler CommandHandler) {
 			// continue with next command
 			continue
 		}
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		handler.OnScanErr(state, scanErr)
 	}
 }
 
