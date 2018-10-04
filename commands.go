@@ -157,6 +157,9 @@ var DefaultCommands CommandMap
 // continue.
 // OnScanErr is called if there is an error while reading a command line from
 // the state's reader.
+//
+// Errors while writing to the provided out stream might be reported, but
+// this is not a requirement.
 type CommandHandler interface {
 	Init() *ExecutorState
 	Start(s *ExecutorState)
@@ -396,21 +399,16 @@ func CdCommand(state *ExecutorState, args ...string) error {
 // image.jpeg and image.png should be included if you're planning to use
 // this function.
 func ImageStorageCommand(state *ExecutorState, args ...string) error {
-	var writeErr error
 	switch {
 	case len(args) == 0:
-		_, writeErr = fmt.Fprintln(state.Out, "Number of database images:", state.Mapper.Len())
-		return writeErr
+		fmt.Fprintln(state.Out, "Number of database images:", state.Mapper.Len())
+		return nil
 	case args[0] == "list":
 		for _, path := range state.Mapper.IDMapping {
-			_, writeErr = fmt.Fprintf(state.Out, "  %s\n", path)
-			if writeErr != nil {
-				return writeErr
-			}
+			fmt.Fprintf(state.Out, "  %s\n", path)
 		}
-		_, writeErr = fmt.Fprintln(state.Out, "Total:", state.Mapper.Len())
-		return writeErr
-
+		fmt.Fprintln(state.Out, "Total:", state.Mapper.Len())
+		return nil
 	case args[0] == "load":
 		var dir string
 		var recursive bool
@@ -418,6 +416,7 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 		switch {
 		case len(args) == 1:
 			dir = state.WorkingDir
+			return nil
 		case len(args) > 2:
 			// parse recursive flag
 			var boolErr error
@@ -434,19 +433,14 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 			if pathErr != nil {
 				return pathErr
 			}
+			return nil
 		default:
 			// just to be sure, should never happen
 			return nil
 		}
-		_, writeErr = fmt.Fprintln(state.Out, "Loading images from", dir)
-		if writeErr != nil {
-			return writeErr
-		}
+		fmt.Fprintln(state.Out, "Loading images from", dir)
 		if recursive {
-			_, writeErr = fmt.Fprintln(state.Out, "Recursive mode enabled")
-			if writeErr != nil {
-				return writeErr
-			}
+			fmt.Fprintln(state.Out, "Recursive mode enabled")
 		}
 		state.Mapper.Clear()
 		// make gchs invalid
@@ -457,12 +451,9 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 			state.GCHStorage = nil
 			return loadErr
 		}
-		_, writeErr = fmt.Fprintln(state.Out, "Successfully read", state.Mapper.Len(), "images")
-		if writeErr != nil {
-			return writeErr
-		}
-		_, writeErr = fmt.Fprintln(state.Out, "Don't forget to (re)load precomputed data if required!")
-		return writeErr
+		fmt.Fprintln(state.Out, "Successfully read", state.Mapper.Len(), "images")
+		fmt.Fprintln(state.Out, "Don't forget to (re)load precomputed data if required!")
+		return nil
 	default:
 		return ErrCmdSyntaxErr
 	}
@@ -544,6 +535,20 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 				"to", path)
 		}
 		return saveErr
+	case args[0] == "load":
+		if len(args) < 2 {
+			return ErrCmdSyntaxErr
+		}
+		path, pathErr := state.GetPath(args[1])
+		if pathErr != nil {
+			return pathErr
+		}
+		controller := HistogramFSController{}
+		readErr := controller.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		return nil
 	default:
 		return ErrCmdSyntaxErr
 	}

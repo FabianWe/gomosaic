@@ -609,7 +609,7 @@ func (s *MemoryHistStorage) Divisions() uint {
 // TODO provide example sticking this all together
 
 // MemHistStorageFromFSMapper creates a new memory histogram storage that
-// contains an entry for each image describec by the filesystem mapper.
+// contains an entry for each image described by the filesystem mapper.
 // If no histogram for an image is found an error is returned. An error
 // is also returned if there is an invalid histogram (wrong k, wrong size
 // of entries).
