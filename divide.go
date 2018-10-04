@@ -239,8 +239,8 @@ func DivideImage(img image.Image, distribution TileDivision, numRoutines int) (T
 		i, j int
 	}
 
-	jobs := make(chan job, 1000)
-	errorChan := make(chan error, 1000)
+	jobs := make(chan job, BufferSize)
+	errorChan := make(chan error, BufferSize)
 
 	for w := 0; w < numRoutines; w++ {
 		go func() {

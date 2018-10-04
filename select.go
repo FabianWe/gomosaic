@@ -146,7 +146,7 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.
 	type job struct {
 		tileY, tileX int
 	}
-	jobs := make(chan job, 1000)
+	jobs := make(chan job, BufferSize)
 
 	// workers
 	for w := 0; w < min.NumRoutines; w++ {
@@ -243,8 +243,8 @@ func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image
 	}
 
 	// compute histograms for each tile
-	jobs := make(chan job, 1000)
-	done := make(chan bool, 1000)
+	jobs := make(chan job, BufferSize)
+	done := make(chan bool, BufferSize)
 
 	for w := 0; w < m.NumRoutines; w++ {
 		go func() {

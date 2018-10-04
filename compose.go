@@ -20,6 +20,14 @@ import (
 	"sync"
 )
 
+var (
+	// ImageCacheSize is the size of images caches. Some procedures (especially
+	// the composition of mosaics) might be much more performant if they're
+	// allowed to cache images. This variable controls the size of such caches,
+	// it must be a number ≥ 1.
+	ImageCacheSize = 15
+)
+
 // ResizeStrategy is a function that scales an image (img) to an image of
 // exyctly the size defined by tileWidth and tileHeight.
 // This is used to compose the mosaic when the selected database images must be
@@ -177,8 +185,7 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	// to (width, height)
 	resBounds := image.Rect(0, 0, lastTile.Max.X, lastTile.Max.Y)
 	res = image.NewRGBA(resBounds)
-	// size should be okay?
-	cache := NewImageCache(15)
+	cache := NewImageCache(ImageCacheSize)
 	for i := 0; i < numTilesVert; i++ {
 		tilesCol := symbolicTiles[i]
 		divisionCol := mosaicDivison[i]

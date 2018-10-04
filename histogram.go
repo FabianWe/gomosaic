@@ -218,8 +218,8 @@ func CreateHistograms(ids []ImageID, storage ImageStorage, normalize bool, k uin
 	}
 
 	res := make([]*Histogram, numImages)
-	jobs := make(chan job, 1000)
-	errorChan := make(chan error, 1000)
+	jobs := make(chan job, BufferSize)
+	errorChan := make(chan error, BufferSize)
 	for w := 0; w < numRoutines; w++ {
 		go func() {
 			for next := range jobs {

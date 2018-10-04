@@ -24,6 +24,13 @@ const (
 	Debug = true
 )
 
+var (
+	// BufferSize is the (default) size of buffers. Some methods create buffered
+	// channels, this parameter controls how big such buffers might be.
+	// Usually such buffers store no big data (ints, bools etc.).
+	BufferSize = 1000
+)
+
 // ProgressFunc is a function that is used to inform a caller about the progress
 // of a called function.
 // For example if we process thousands of images we might wish to know
