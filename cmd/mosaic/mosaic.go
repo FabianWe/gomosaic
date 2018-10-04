@@ -21,10 +21,12 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"path/filepath"
 	"runtime"
 	// Since we're not in the gomosaic package we have to import it
 	"github.com/FabianWe/gomosaic"
 
+	homedir "github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -45,12 +47,14 @@ func main() {
 		repl(&replState{
 			workingDir:  ".",
 			numRoutines: initialRoutines,
+			fsMapper:    gomosaic.NewFSMapper(),
 		})
 	}
 }
 
 type replState struct {
 	workingDir  string
+	fsMapper    *gomosaic.FSMapper
 	numRoutines int
 }
 
@@ -177,6 +181,9 @@ func init() {
 	commandMap = make(map[string]replCommand, 20)
 	commandMap["help"] = helpCommand
 	commandMap["exit"] = exitCommand
+	commandMap["pwd"] = pwdCommand
+	commandMap["cd"] = cdCommand
+	commandMap["image-info"] = imageInfo
 }
 
 func helpCommand(state *replState, args ...string) {
@@ -190,6 +197,49 @@ func helpCommand(state *replState, args ...string) {
 func exitCommand(state *replState, args ...string) {
 	fmt.Println("Exiting gomosaic. Good bye!")
 	os.Exit(0)
+}
+
+func pwdCommand(state *replState, args ...string) {
+	abs, absErr := filepath.Abs(state.workingDir)
+	if absErr != nil {
+		fmt.Println("Error:", absErr)
+	}
+	fmt.Println(abs)
+}
+
+func cdCommand(state *replState, args ...string) {
+	if len(args) != 1 {
+		fmt.Println("Error: Usage: \"cd <DIR>\"")
+	}
+	path := args[0]
+	var expandErr error
+	path, expandErr = homedir.Expand(path)
+	if expandErr != nil {
+		fmt.Println("Error: Changing directory failed:", expandErr)
+		return
+	}
+	if fi, err := os.Lstat(path); err != nil {
+		fmt.Println("Error: Changing directory failed:", err)
+	} else {
+		if fi.IsDir() {
+			state.workingDir = path
+		} else {
+			fmt.Println("Error: Not a directory:", path)
+		}
+	}
+}
+
+func imageInfo(state *replState, args ...string) {
+	switch {
+	case len(args) == 0:
+		fmt.Println("Number of database images:", state.fsMapper.Len())
+		return
+	case args[0] == "list":
+		for _, path := range state.fsMapper.IDMapping {
+			fmt.Printf("  %s", path)
+		}
+		fmt.Println("Total:", state.fsMapper.Len())
+	}
 }
 
 func repl(state *replState) {
@@ -219,7 +269,7 @@ func repl(state *replState) {
 			if replFunc, ok := commandMap[cmd]; ok {
 				replFunc(state, parsedCmd[1:]...)
 			} else {
-				fmt.Printf("Unknown command\"%s\"\n", cmd)
+				fmt.Printf("Unknown command \"%s\"\n", cmd)
 			}
 		}()
 	}
