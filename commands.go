@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,10 +81,24 @@ type ExecutorState struct {
 
 	// CutMosaic describes whether the mosaic should be "cut".
 	// Cutting means to cut the resulting image s.t. it fits  the results bounds.
-	// Example: Consider you want to create an image with width 950 you want 10
-	// tiles in this direction. This means that
-	// TODO look this up and then check creation procedure...
+	// Example: Consider you want to create an image with width 99 width and you
+	// want to tiles horizontally. This leads to an image where each tile has
+	// a width of 9. Ten tiles yields to a final width of 90. As you see 9 pixels
+	// are "left over". The distribution in ten tiles is fixed, so we can't add
+	// another tile. But in order to enforce the original propsed width
+	// we can enlarge the last tile by 9 pixels. So we would have 9 tiles with
+	// width 9 and one tile with width 18.
+	//
+	// CutMosaic controls what to do with those remaining pixels: If cut is set
+	// to true we skip the 9 pixels and return an image of size 90. If set to
+	// false we enlarge the last tile and return an image witz size 99.
+	// Usually the default is false.
 	CutMosaic bool
+
+	// JPGQuality is the quality between 1 and 100 used when storing images.
+	// The higher the value the better the quality. We use a default quality of
+	// 100.
+	JPGQuality int
 }
 
 // GetPath returns the absolute path given some other path.
@@ -362,8 +377,83 @@ L:
 
 // PwdCommand is a command that prints the current working directory.
 func PwdCommand(state *ExecutorState, args ...string) error {
-	_, err := fmt.Fprintln(state.Out, state.WorkingDir)
-	return err
+	fmt.Fprintln(state.Out, state.WorkingDir)
+	return nil
+}
+
+func StatsCommand(state *ExecutorState, args ...string) error {
+	m := map[string]interface{}{
+		"routines":     state.NumRoutines,
+		"verbose":      state.Verbose,
+		"cut":          state.CutMosaic,
+		"jpeg-quality": state.JPGQuality,
+	}
+	if len(args) == 1 {
+		// print specific value
+		if val, has := m[args[0]]; has {
+			fmt.Fprintf(state.Out, "%s ==> %v\n", args[0], val)
+		} else {
+			return fmt.Errorf("Unkown variable %s", args[0])
+		}
+	} else {
+		// print all values
+		// keep order deterministic
+		keys := make([]string, 0, len(m))
+		for k, _ := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, variable := range keys {
+			val := m[variable]
+			fmt.Fprintf(state.Out, "%s ==> %v\n", variable, val)
+		}
+	}
+	return nil
+}
+
+func SetVarCommand(state *ExecutorState, args ...string) error {
+	if len(args) != 2 {
+		return errors.New("Invalid set syntax: Requires variable and value. For a list of variables use \"stats\"")
+	}
+	name, valueStr := args[0], args[1]
+	switch name {
+	case "routines":
+		val, parseErr := strconv.Atoi(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for routines (must be positive int): %s", parseErr.Error())
+		}
+		if val <= 0 {
+			return fmt.Errorf("Invalid value for routines (must be positive int): %d", val)
+		}
+		state.NumRoutines = val
+		return nil
+	case "verbose":
+		val, parseErr := strconv.ParseBool(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for verbose (must be true or false): %s", parseErr.Error())
+		}
+		state.Verbose = val
+		return nil
+	case "cut":
+		val, parseErr := strconv.ParseBool(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for cut (must be true or false): %s", parseErr.Error())
+		}
+		state.CutMosaic = val
+		return nil
+	case "jpeg-quality":
+		val, parseErr := strconv.Atoi(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for jpeg-quality (must be int between 1 and 100): %s", parseErr.Error())
+		}
+		if val < 1 || val > 100 {
+			return fmt.Errorf("Invalid value for jpeg-quality (must be int between 1 and 100): %d", val)
+		}
+		state.JPGQuality = val
+		return nil
+	default:
+		return fmt.Errorf("Invalid variable \"%s\". For a list use \"stats\"", name)
+	}
 }
 
 // CdCommand is a command that changes the current directory.
@@ -596,7 +686,7 @@ func parseGCHMetric(s string) (HistogramMetric, error) {
 	return nil, fmt.Errorf("Unkown metric %s", metricName)
 }
 
-func saveImage(file string, img image.Image) error {
+func saveImage(file string, img image.Image, jpgQuality int) error {
 	outFile, outErr := os.Create(file)
 	if outErr != nil {
 		return outErr
@@ -606,7 +696,7 @@ func saveImage(file string, img image.Image) error {
 	ext := filepath.Ext(file)
 	switch strings.ToLower(ext) {
 	case ".jpg", ".jpeg":
-		encErr = jpeg.Encode(outFile, img, &jpeg.Options{Quality: 100})
+		encErr = jpeg.Encode(outFile, img, &jpeg.Options{Quality: jpgQuality})
 	case ".png":
 		encErr = png.Encode(outFile, img)
 	default:
@@ -736,7 +826,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			fmt.Fprintln(state.Out, "Image selection took", execTime)
 			fmt.Fprintln(state.Out, "Saving image")
 		}
-		if writeErr := saveImage(outPath, mosaic); writeErr != nil {
+		if writeErr := saveImage(outPath, mosaic, state.JPGQuality); writeErr != nil {
 			return writeErr
 		}
 		fmt.Fprintln(state.Out, "Mosaic saved to", outPath)
@@ -752,6 +842,17 @@ func init() {
 		Exec:        PwdCommand,
 		Usage:       "pwd",
 		Description: "Show current working directory.",
+	}
+	DefaultCommands["stats"] = Command{
+		Exec:        StatsCommand,
+		Usage:       "stats [var]",
+		Description: "Show value of variables that can be changed via set, if var is given only value of that variable",
+	}
+	DefaultCommands["set"] = Command{
+		Exec:  SetVarCommand,
+		Usage: "<routines | verbose | cut | jpeg-quality> <value>",
+		Description: "Set value for a variable. For details about the variables" +
+			"please refer to the user documentation.",
 	}
 	DefaultCommands["cd"] = Command{
 		Exec:        CdCommand,
@@ -819,6 +920,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		In:          os.Stdin,
 		Out:         os.Stdout,
 		CutMosaic:   false,
+		JPGQuality:  100,
 	}
 }
 
@@ -895,6 +997,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		In:          h.Source,
 		Out:         os.Stdout,
 		CutMosaic:   false,
+		JPGQuality:  100,
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	_ "image/png"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"unicode/utf8"
 	// Since we're not in the gomosaic package we have to import it
@@ -159,6 +160,17 @@ func init() {
 		Usage:       "pwd",
 		Description: "Show current working directory.",
 	}
+	cmdMap["stats"] = gomosaic.Command{
+		Exec:        gomosaic.StatsCommand,
+		Usage:       "stats [var]",
+		Description: "Show value of variables that can be changed via set, if var is given only value of that variable",
+	}
+	cmdMap["set"] = gomosaic.Command{
+		Exec:  gomosaic.SetVarCommand,
+		Usage: "<routines | verbose | cut | jpeg-quality> <value>",
+		Description: "Set value for a variable. For details about the variables" +
+			"please refer to the user documentation.",
+	}
 	cmdMap["cd"] = gomosaic.Command{
 		Exec:        gomosaic.CdCommand,
 		Usage:       "cd <DIR>",
@@ -226,7 +238,14 @@ func helpCommand(state *gomosaic.ExecutorState, args ...string) error {
 		"commands now to create a mosaic. See Wiki / website for details.")
 	fmt.Println()
 	fmt.Println("Commands")
-	for _, cmd := range cmdMap {
+	// keep order deterministic and sorted
+	keys := make([]string, 0, len(cmdMap))
+	for cmd := range cmdMap {
+		keys = append(keys, cmd)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		cmd := cmdMap[key]
 		fmt.Println()
 		fmt.Println("Usage:", cmd.Usage)
 		fmt.Println(cmd.Description)
@@ -255,10 +274,11 @@ For more details and third-party licenses see <https://github.com/FabianWe/gomos
 }
 
 func repl() {
-	// panics of Init in ReplHandler
+	// panics of Init in ReplHandler and all other panics
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintln(os.Stderr, "Unable to initialize engine or some other error or bug! Exiting.")
+			fmt.Fprintln(os.Stderr, r)
 			os.Exit(1)
 		}
 	}()
@@ -271,6 +291,13 @@ func fromTemplate(template string, args ...string) {
 }
 
 func script(r io.Reader, args ...string) {
+	// panics of Init in ScriptHandler and all other panics
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(os.Stderr, "Unable to initialize engine or some other error or bug! Exiting.")
+			os.Exit(1)
+		}
+	}()
 	//  check if args are given
 	if len(args) > 0 {
 		// parameterize lines
@@ -281,14 +308,8 @@ func script(r io.Reader, args ...string) {
 			os.Exit(1)
 		}
 	}
-	// panics of Init in ScriptHandler
 	h := gomosaic.NewScriptHandler(r)
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, "Unable to initialize engine or some other error or bug! Exiting.")
-			os.Exit(1)
-		}
-	}()
+
 	gomosaic.Execute(h, cmdMap)
 }
 
