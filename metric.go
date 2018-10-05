@@ -44,29 +44,6 @@ type HistogramStorage interface {
 	Divisions() uint
 }
 
-// TODO Gone because ImageMetric needed to change
-// // HistogramImageMetric creates a new image metric given a histogram metric
-// // and a histogram storage.
-// // The image metric looks up both image ids in the histogram storage and
-// // returns the the histogram metric of those histograms. If one of the
-// // histograms cannot be received an error is returned.
-// func HistogramImageMetric(m HistogramMetric, storage HistogramStorage) ImageMetric {
-// 	return func(a, b ImageID, iStorage ImageStorage) (float64, error) {
-// 		hA, aErr := storage.GetHistogram(a)
-// 		if aErr != nil {
-// 			return -1.0, aErr
-// 		}
-// 		hB, bErr := storage.GetHistogram(b)
-// 		if bErr != nil {
-// 			return -1.0, bErr
-// 		}
-// 		if hA.K != hB.K {
-// 			return -1.0, fmt.Errorf("Invalid histogram dimensions: %d != %d", hA.K, hB.K)
-// 		}
-// 		return m(hA, hB), nil
-// 	}
-// }
-
 // VectorMetric is a function that takes two vectors of the same length and
 // returns a metric value ("distance") of the two.
 //
