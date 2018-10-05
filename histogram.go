@@ -242,7 +242,6 @@ func CreateHistograms(ids []ImageID, storage ImageStorage, normalize bool, k uin
 	}
 
 	go func() {
-
 		for i, id := range ids {
 			jobs <- job{pos: i, id: id}
 		}

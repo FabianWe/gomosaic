@@ -217,69 +217,70 @@ func (s FiveLCHScheme) GetParts(img image.Image) ([][]image.Image, error) {
 	return res, nil
 }
 
-// func CreateLCHs(scheme LCHScheme, ids []ImageID, storage ImageStorage, normalize bool,
-// 	k uint, numRoutines int, progress ProgressFunc) ([]*LCH, error) {
-// 	if numRoutines <= 0 {
-// 		numRoutines = 1
-// 	}
-//
-// 	numImages := len(ids)
-//
-// 	// any error that occurs sets this variable (first error)
-// 	// this is done later
-// 	var err error
-//
-// 	res := make([]*LCH, numImages)
-// 	jobs := make(chan int, BufferSize)
-// 	errorChan := make(chan error, BufferSize)
-//
-// 	// workers
-// 	for w := 0; w < numRoutines; w++ {
-// 		go func() {
-// 			for next := range jobs {
-// 				image, imageErr := storage.LoadImage(ids[next])
-// 				if imageErr != nil {
-// 					errorChan <- imageErr
-// 					continue
-// 				}
-// 				// TODO add normalize option
-// 				lch, lchErr := scheme.ComputLCH(image, k)
-// 				if lchErr != nil {
-// 					errorChan <- lchErr
-// 					continue
-// 				}
-// 				if normalize {
-// 					// TODO
-// 				}
-// 				res[next] = lch
-// 				errorChan <- nil
-// 			}
-// 		}()
-// 	}
-//
-// 	// create jobs
-// 	go func() {
-// 		for i := 0; i < len(ids); i++ {
-// 			jobs <- i
-// 		}
-// 		close(jobs)
-// 	}()
-//
-// 	// read errors
-// 	for i := 0; i < numImages; i++ {
-// 		nextErr := <-errorChan
-// 		if nextErr != nil && err == nil {
-// 			err = nextErr
-// 		}
-// 		if progress != nil {
-// 			progress(i)
-// 		}
-// 	}
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return res, nil
-// }
+func CreateLCHs(scheme LCHScheme, ids []ImageID, storage ImageStorage, normalize bool,
+	k uint, numRoutines int, progress ProgressFunc) ([]*LCH, error) {
+	if numRoutines <= 0 {
+		numRoutines = 1
+	}
+	numImages := len(ids)
+	// any error that occurs sets this variable (first error)
+	// this is done later
+	var err error
+
+	res := make([]*LCH, numImages)
+	jobs := make(chan int, BufferSize)
+	errorChan := make(chan error, BufferSize)
+
+	// workers
+	for w := 0; w < numRoutines; w++ {
+		go func() {
+			for next := range jobs {
+				image, imageErr := storage.LoadImage(ids[next])
+				if imageErr != nil {
+					errorChan <- imageErr
+					continue
+				}
+				lch, lchErr := GenLCH(scheme, image, k, normalize)
+				if lchErr != nil {
+					errorChan <- lchErr
+					continue
+				}
+				res[next] = lch
+				errorChan <- nil
+			}
+		}()
+	}
+
+	// create jobs
+	go func() {
+		for i := 0; i < len(ids); i++ {
+			jobs <- i
+		}
+		close(jobs)
+	}()
+
+	// read errors
+	for i := 0; i < numImages; i++ {
+		nextErr := <-errorChan
+		if nextErr != nil && err == nil {
+			err = nextErr
+		}
+		if progress != nil {
+			progress(i)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// CreateAllLCHs creates all lchs for images in the storage.
+// It is a shortcut using CreateLCHs, see this documentation for details.
+func CreateAllLCHs(scheme LCHScheme, storage ImageStorage, normalize bool,
+	k uint, numRoutines int, progress ProgressFunc) ([]*LCH, error) {
+	return CreateLCHs(scheme, IDList(storage), storage, normalize, k, numRoutines, progress)
+}
 
 // LCHStorage maps image ids to LCHs.
 // By default the histograms of the LCHs should be normalized.
