@@ -995,10 +995,14 @@ func (h ReplHandler) OnScanErr(s *ExecutorState, err error) {
 	fmt.Println("Error while reading:", err.Error())
 }
 
+// ScriptHandler implements CommandHandler. It writes the output to stdout
+// and reads from a specified reader. It stops whenever an error is enountered.
 type ScriptHandler struct {
 	Source io.Reader
 }
 
+// NewScriptHandler returns a new script handler that reads input from the given
+// source.
 func NewScriptHandler(source io.Reader) ScriptHandler {
 	return ScriptHandler{Source: source}
 }
@@ -1115,6 +1119,9 @@ func Parameterized(r io.Reader, args ...string) (io.Reader, error) {
 	return ReaderFromCmdLines(lines), nil
 }
 
+// ParameterizedFromStrings runs the commands provided in commands (each entry
+// is considered to be a command) and replaces placeholders by args.
+// For placeholder details see Parameterized.
 func ParameterizedFromStrings(commands []string, args ...string) io.Reader {
 	// create replacer that replaces each $i by args[i-1]
 	replaceArgs := make([]string, 0, 2*len(args))
