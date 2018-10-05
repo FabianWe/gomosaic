@@ -18,11 +18,15 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	homedir "github.com/mitchellh/go-homedir"
@@ -565,6 +569,164 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 	}
 }
 
+func parseGCHMetric(s string) (HistogramMetric, error) {
+	var metricName string
+	switch {
+	case s == "gch":
+		metricName = "euclid"
+	case strings.HasPrefix(s, "gch-"):
+		metricName = s[4:]
+	default:
+		return nil, fmt.Errorf("Invalid gch format, expect \"gch\" or \"gch-<METRIC>\", got %s", s)
+	}
+	if metric, ok := GetHistogramMetric(metricName); ok {
+		return metric, nil
+	}
+	return nil, fmt.Errorf("Unkown metric %s", metricName)
+}
+
+func saveImage(file string, img image.Image) error {
+	outFile, outErr := os.Create(file)
+	if outErr != nil {
+		return outErr
+	}
+	defer outFile.Close()
+	var encErr error
+	ext := filepath.Ext(file)
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg":
+		encErr = jpeg.Encode(outFile, img, &jpeg.Options{Quality: 100})
+	case ".png":
+		encErr = png.Encode(outFile, img)
+	default:
+		// this should not happen...
+		return fmt.Errorf("Unsupported file type: %s, expected .jpg or .png", ext)
+	}
+	return encErr
+}
+
+func MosaicCommand(state *ExecutorState, args ...string) error {
+	// TODO test if histograms empty, test if images empty...
+	// mosaic in.png out.png gch-... tilesXxtilesY [outDimensions]
+	switch {
+	case len(args) > 3:
+		if !JPGAndPNG(filepath.Ext(args[1])) {
+			return fmt.Errorf("Supported files are .jpg and .png, got file %s", args[1])
+		}
+		// get out path
+		outPath, outPathErr := state.GetPath(args[1])
+		if outPathErr != nil {
+			return outPathErr
+		}
+		selectionStr := args[2]
+		// only gch supported atm
+		metric, metricErr := parseGCHMetric(selectionStr)
+		if metricErr != nil {
+			return metricErr
+		}
+		tilesX, tilesY, tilesParseErr := ParseDimensions(args[3])
+		if tilesParseErr != nil {
+			return ErrCmdSyntaxErr
+		}
+		if tilesX == 0 || tilesY == 0 {
+			return fmt.Errorf("Tiles dimensions are not allowed to be empty, got %s", args[3])
+		}
+		inPath, inPathErr := state.GetPath(args[0])
+		if inPathErr != nil {
+			return inPathErr
+		}
+		// read query image
+		if state.Verbose {
+			fmt.Fprintln(state.Out, "Reading image", inPath)
+		}
+		start := time.Now()
+		r, openErr := os.Open(inPath)
+		if openErr != nil {
+			return openErr
+		}
+		defer r.Close()
+		img, _, decodeErr := image.Decode(r)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		queryBounds := img.Bounds()
+		if queryBounds.Empty() {
+			return errors.New("Query image is empty")
+		}
+		queryWidth, queryHeight := queryBounds.Dx(), queryBounds.Dy()
+		// compute output dimensions now that we have the original image
+		var mosaicWidth, mosaicHeight int
+		if len(args) > 4 {
+			var mosaicParseErr error
+			mosaicWidth, mosaicHeight, mosaicParseErr = ParseDimensionsEmpty(args[4])
+			if mosaicParseErr != nil {
+				return mosaicParseErr
+			}
+			// because dimensions are allowed to be empty we have to deal with
+			// negative values
+			switch {
+			case mosaicWidth < 0 && mosaicHeight < 0:
+				// keep original size
+				mosaicWidth, mosaicHeight = queryWidth, queryHeight
+			case mosaicWidth < 0:
+				// compute width and keep ratio
+				mosaicWidth = KeepRatioWidth(queryWidth, queryHeight, mosaicHeight)
+			case mosaicHeight < 0:
+				// compute height and keep ratio
+				mosaicHeight = KeepRatioHeight(queryWidth, queryHeight, mosaicWidth)
+			default:
+				// do nothing, both given
+			}
+		} else {
+			mosaicWidth, mosaicHeight = queryWidth, queryHeight
+		}
+		if mosaicWidth == 0 || mosaicHeight == 0 {
+			return fmt.Errorf("Mosaic image would be empty, dimensions %dx%d", mosaicWidth, mosaicHeight)
+		}
+		divider := NewFixedNumDivider(tilesX, tilesY, true)
+		if state.Verbose {
+			fmt.Fprintln(state.Out, "Dividing image into tiles")
+		}
+		dist := divider.Divide(img.Bounds())
+		selector := GCHSelector(state.GCHStorage, metric, state.NumRoutines)
+		selection, selectionErr := selector.SelectImages(state.ImgStorage, img, dist)
+		if selectionErr != nil {
+			return selectionErr
+		}
+		execTime := time.Since(start)
+		if state.Verbose {
+			fmt.Fprintln(state.Out, "Preparation took", execTime)
+			fmt.Fprintln(state.Out, "Composing mosaic")
+		}
+		start = time.Now()
+		// create mosaic tiles, for this create a new divider and a distribution
+		mosaicBounds := image.Rect(0, 0, mosaicWidth, mosaicHeight)
+		// TODO make this an option
+		// TODO check again with compose if this is okay
+		// TODO check again all requirements
+		divider.Cut = false
+		mosaicDist := divider.Divide(mosaicBounds)
+		// TODO resizer should be an option
+		mosaic, mosaicErr := ComposeMosaic(state.ImgStorage, selection, mosaicDist,
+			DefaultResizer, ForceResize)
+		if mosaicErr != nil {
+			return mosaicErr
+		}
+		execTime = time.Since(start)
+		if state.Verbose {
+			fmt.Fprintln(state.Out, "Image selection took", execTime)
+			fmt.Fprintln(state.Out, "Saving image")
+		}
+		if writeErr := saveImage(outPath, mosaic); writeErr != nil {
+			return writeErr
+		}
+		fmt.Fprintln(state.Out, "Mosaic saved to", outPath)
+		return nil
+	default:
+		return ErrCmdSyntaxErr
+	}
+}
+
 func init() {
 	DefaultCommands = make(map[string]Command, 20)
 	DefaultCommands["pwd"] = Command{
@@ -592,12 +754,18 @@ func init() {
 	}
 	DefaultCommands["gch"] = Command{
 		Exec:  GCHCommand,
-		Usage: "gch create [k] or gch TODO",
+		Usage: "gch create [k] or gch load <FILE> or gch save <FILE>",
 		Description: "Used to administrate global color histograms (GCHs)\n\n" +
 			"If \"create\" is used GCHs are created for all images in the current" +
 			"storage. The optional argument k must be a number between 1 and 256." +
 			"See usage documentation / Wiki for details about this value. 8 is the" +
-			"default value and should be fine.",
+			"default value and should be fine.\n\nsave and load commands load files" +
+			"containing GHCs from a file.",
+	}
+	DefaultCommands["mosaic"] = Command{
+		Exec:        MosaicCommand,
+		Usage:       "TODO",
+		Description: "TODO",
 	}
 }
 

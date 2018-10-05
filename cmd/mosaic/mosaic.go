@@ -73,6 +73,13 @@ func init() {
 			"See usage documentation / Wiki for details about this value. 8 is the" +
 			"default value and should be fine.",
 	}
+
+	cmdMap["mosaic"] = gomosaic.Command{
+		Exec:        gomosaic.MosaicCommand,
+		Usage:       "TODO",
+		Description: "TODO",
+	}
+
 	// add exit command
 	cmdMap["exit"] = gomosaic.Command{
 		Exec:        exitCommand,

@@ -193,6 +193,7 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 		for j := 0; j < lenCol; j++ {
 			tileArea := divisionCol[j]
 			dbImage := tilesCol[j]
+			// TODO NoImageID
 			insertTile(res, tileArea, storage, dbImage, resizer, s, cache)
 		}
 	}

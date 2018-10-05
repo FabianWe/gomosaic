@@ -25,9 +25,13 @@ import (
 // ImageSelector is used to select images for all tiles.
 // The workflow is as follows: The selector gets initialized by calling Init,
 // then images are selected with SelectImages.
+//
+// This is because we might want to use an selector multiple times, though
+// no such approach is implemented at the moment.
 type ImageSelector interface {
-	// Init is called each time the storage changes, thus you can load precomputed
-	// data, for example histograms, from a file.
+	// Init is called each time the storage changes and at creation.
+	// Note that in general a selector is not responsible for synching histograms
+	// with filesystem files etc. This should happen outside the storage.
 	Init(storage ImageStorage) error
 
 	// SelectImage is called after Init and returns the most fitting images for
@@ -67,8 +71,8 @@ type ImageMetric interface {
 // selects the best images.
 //
 // Thus the workflow is as follows: First the InitStorage method of the metric
-// is called, that is the step in which precomputed information should be read
-// from a file etc.
+// is called. Again, it is not the job of the metric to keep in sync with a
+// filesystem / web resource whatever.
 // Then for a query once InitTiles is called on the metric. In this step
 // information about the query image are computed, for example computing GCHs
 // of the query tiles. Then multiple calls to compare are made.
@@ -217,7 +221,6 @@ func NewHistogramImageMetric(storage HistogramStorage, metric HistogramMetric, n
 
 // InitStorage does at the moment nothing.
 func (m *HistogramImageMetric) InitStorage(storage ImageStorage) error {
-	// probably some synching here?
 	return nil
 }
 
