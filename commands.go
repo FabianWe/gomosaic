@@ -601,12 +601,8 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 			k = uint(asInt)
 		}
 
-		var writeErr error
 		// create all histograms
-		_, writeErr = fmt.Fprintf(state.Out, "Creating histograms for all images in storage with k = %d sub-divisions\n", k)
-		if writeErr != nil {
-			return writeErr
-		}
+		fmt.Fprintf(state.Out, "Creating histograms for all images in storage with k = %d sub-divisions\n", k)
 		var progress ProgressFunc
 		if state.Verbose {
 			progress = StdProgressFunc(state.Out, "", int(state.ImgStorage.NumImages()), 100)
@@ -620,8 +616,8 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 		}
 		// set histograms
 		state.GCHStorage = &MemoryHistStorage{Histograms: histograms, K: k}
-		_, writeErr = fmt.Fprintf(state.Out, "Computed %d histograms in %v\n", len(histograms), execTime)
-		return writeErr
+		fmt.Fprintf(state.Out, "Computed %d histograms in %v\n", len(histograms), execTime)
+		return nil
 	case args[0] == "save":
 		if state.GCHStorage == nil {
 			return errors.New("No GCHs loaded yet")
