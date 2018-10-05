@@ -115,8 +115,6 @@ func SubImage(img image.Image, r image.Rectangle) (image.Image, error) {
 	return imager.SubImage(r), nil
 }
 
-// TODO maybe it is a good idea to add thumbnail as in nfnt?
-
 // ImageResizer resizes an image to the given width and height.
 type ImageResizer interface {
 	Resize(width, height uint, img image.Image) image.Image

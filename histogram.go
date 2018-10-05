@@ -211,7 +211,6 @@ func CreateHistograms(ids []ImageID, storage ImageStorage, normalize bool, k uin
 	var err error
 
 	// struct that we use for the channel
-	// TODO easier way: type job int (pos) should do just fine
 	type job struct {
 		pos int
 		id  ImageID

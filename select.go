@@ -113,8 +113,6 @@ func (min *ImageMetricMinimizer) Init(storage ImageStorage) error {
 	return min.Metric.InitStorage(storage)
 }
 
-// TODO test with smaller buffer if everything is okay
-
 // SelectImages selects the image that minimizes the metric for each tile.
 // It computes the most fitting image for NumRoutines tiles concurrently.
 func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.Image, dist TileDivision) ([][]ImageID, error) {
@@ -194,8 +192,6 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.
 	wg.Wait()
 	return result, nil
 }
-
-// TODO add synching between image storage and histogram storage
 
 // HistogramImageMetric implements ImageMetric by keeping a histogram storage
 // and computing histograms for a query image.

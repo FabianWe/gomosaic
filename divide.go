@@ -202,7 +202,6 @@ func (divider *FixedNumDivider) Divide(bounds image.Rectangle) TileDivision {
 	if tileHeight <= 0 {
 		tileHeight = 1
 	}
-	// TODO do something with rest (cut)
 	numRows := divider.NumY
 	numCols := divider.NumX
 	res := make(TileDivision, divider.NumY)

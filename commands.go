@@ -707,8 +707,11 @@ func saveImage(file string, img image.Image, jpgQuality int) error {
 	return encErr
 }
 
+// MosaicCommand creates a mosaic images.
+// For details see the entry created in the init() method / the description
+// text of the command our the online documentation. Usage example:
+// mosaic in.jpg out.jpg gch-cosine 20x30 1024x768
 func MosaicCommand(state *ExecutorState, args ...string) error {
-	// TODO test if histograms empty, test if images empty...
 	// mosaic in.png out.png gch-... tilesXxtilesY [outDimensions]
 	if int(state.ImgStorage.NumImages()) == 0 {
 		return errors.New("No images in storage, use \"storage load\"")
