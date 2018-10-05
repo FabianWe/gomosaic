@@ -549,3 +549,29 @@ func LCHFileName(k, schemeSize uint, ext string) string {
 	}
 	return fmt.Sprintf("lch-%d-%d.%s", k, schemeSize, ext)
 }
+
+// MemLCHStorageFromFSMapper creates a new memory LCH storage that contains
+// an entry MemLCHStorageFromFSMapper each image described by the filesystem mapper.
+// If no lch for an image is found an error is returned.
+//
+// HistMap is the map as computed by the Map() function of the LCH
+// controller. It is an argument to avoid multiple compoutations of it if used
+// more often. Just set it to nil and it will be computed with the map function.
+func MemLCHStorageFromFSMapper(mapper *FSMapper, fileContent *LCHFSController,
+	lchMap map[string]*LCH) (*MemoryLCHStorage, error) {
+	if lchMap == nil {
+		lchMap = fileContent.Map()
+	}
+	res := NewMemoryLCHStorage(fileContent.K, fileContent.Size, mapper.Len())
+	// now add each lch to the result, if no lch exists return an error
+	for _, imagePath := range mapper.IDMapping {
+		// lookup
+		if lch, has := lchMap[imagePath]; has {
+			res.LCHs = append(res.LCHs, lch)
+			// k not stored, so we don't do the check as for histograms
+		} else {
+			return nil, fmt.Errorf("No LCH for image \"%s\" found", imagePath)
+		}
+	}
+	return res, nil
+}

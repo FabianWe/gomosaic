@@ -657,7 +657,7 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 		saveErr := controller.WriteFile(path)
 		if saveErr == nil {
 			// ignore write error here
-			fmt.Fprintln(state.Out, "Successfuly wrote", state.ImgStorage.NumImages(), "histograms",
+			fmt.Fprintln(state.Out, "Successfully wrote", state.ImgStorage.NumImages(), "histograms",
 				"to", path)
 		}
 		return saveErr
@@ -695,9 +695,12 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 
 func LCHCommand(state *ExecutorState, args ...string) error {
 	switch {
-	case len(args) < 3:
+	case len(args) == 0:
 		return ErrCmdSyntaxErr
 	case args[0] == "create":
+		if len(args) < 3 {
+			return ErrCmdSyntaxErr
+		}
 		// k is the number of subdivions
 		asInt, parseErr := strconv.Atoi(args[1])
 		if parseErr != nil {
@@ -743,6 +746,66 @@ func LCHCommand(state *ExecutorState, args ...string) error {
 			Size: uint(asInt),
 		}
 		fmt.Fprintf(state.Out, "Computed %d LCHs in %v\n", len(lchs), execTime)
+		return nil
+	case args[0] == "save":
+		if state.LCHStorage == nil {
+			return errors.New("No LCHs loaded yet")
+		}
+		if len(args) < 2 {
+			return ErrCmdSyntaxErr
+		}
+		path, pathErr := state.GetPath(args[1])
+		if pathErr != nil {
+			return pathErr
+		}
+		// check if path is a file or directory
+		// we don't report the fiErr (this is not nil if file doesn't exist which
+		// is of course allowed)
+		fi, fiErr := os.Lstat(path)
+		if fiErr == nil && fi.IsDir() {
+			// save with default naming scheme in that directory
+			name := LCHFileName(state.LCHStorage.K, state.LCHStorage.Size, "gob")
+			path = filepath.Join(path, name)
+		}
+		controller, creationErr := CreateLCHFSController(IDList(state.ImgStorage),
+			state.Mapper, state.LCHStorage)
+		if creationErr != nil {
+			return creationErr
+		}
+		// save file
+		saveErr := controller.WriteFile(path)
+		if saveErr == nil {
+			fmt.Fprintln(state.Out, "Successfully wrote", state.ImgStorage.NumImages(),
+				"LCHs to", path)
+		}
+		return saveErr
+	case args[0] == "load":
+		if len(args) < 2 {
+			return ErrCmdSyntaxErr
+		}
+		path, pathErr := state.GetPath(args[1])
+		if pathErr != nil {
+			return pathErr
+		}
+		controller := LCHFSController{}
+		readErr := controller.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		fmt.Fprintf(state.Out, "Read %d LCHs\n", len(controller.Entries))
+		// we don't care about missing / new images, we just print a warning if
+		// the lengths have change.
+		if len(controller.Entries) != int(state.ImgStorage.NumImages()) {
+			fmt.Fprintln(state.Out, "Unmachted number of images in storage and loaded",
+				"LCHs. Have the images changed? In this case the LCHs must be re-computed.")
+		}
+		memStorage, createErr := MemLCHStorageFromFSMapper(state.Mapper, &controller, nil)
+		if createErr != nil {
+			return createErr
+		}
+		// set
+		state.LCHStorage = memStorage
+		fmt.Fprintln(state.Out, "LCHs have been mapped to image store.")
 		return nil
 	default:
 		return ErrCmdSyntaxErr
