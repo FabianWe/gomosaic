@@ -15,6 +15,7 @@
 package gomosaic
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"sync"
@@ -165,16 +166,20 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 	return nil
 }
 
-// TODO we could use some concurrency here, butprobably resizing is also
-// running concurrently... so would be nice but it's okay?
-// doc: mosaic division must start from(0, 0)
+// ComposeMosaic concurrently composes a mosaic image given the distribution
+// in tiles and the selected images for each tile.
+// Images might be loaded by the storage. The resizer and the resize strategy
+// are used to resize database images to fit in tiles. The mosaic division must
+// start from (0, 0) and the rectangles are not allowed to overlap, in short
+// it has be what we intuively would call a distribution into tiles.
+//
+// Scaled database images are cached to speed up the generation process.
 func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	mosaicDivison TileDivision, resizer ImageResizer, s ResizeStrategy,
 	numRoutines int) (image.Image, error) {
 	if numRoutines <= 0 {
 		numRoutines = 1
 	}
-	// TODO is this correct???
 	numTilesVert := len(symbolicTiles)
 
 	// first create an empty image
@@ -190,6 +195,9 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	// this should be correct because the rectangles are arranged from (0, 0)
 	// to (width, height)
 	resBounds := image.Rect(0, 0, lastTile.Max.X, lastTile.Max.Y)
+	if resBounds.Empty() {
+		return nil, errors.New("Can't compose mosaic: Image would be empty")
+	}
 	res = image.NewRGBA(resBounds)
 	cache := NewImageCache(ImageCacheSize)
 

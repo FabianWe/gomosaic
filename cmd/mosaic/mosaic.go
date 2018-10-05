@@ -167,9 +167,9 @@ func init() {
 	}
 	cmdMap["set"] = gomosaic.Command{
 		Exec:  gomosaic.SetVarCommand,
-		Usage: "<routines | verbose | cut | jpeg-quality> <value>",
+		Usage: "set <variable> <value>",
 		Description: "Set value for a variable. For details about the variables" +
-			"please refer to the user documentation.",
+			" please refer to the user documentation. To see all variables use \"stats\"",
 	}
 	cmdMap["cd"] = gomosaic.Command{
 		Exec:        gomosaic.CdCommand,
@@ -180,29 +180,42 @@ func init() {
 		Exec:  gomosaic.ImageStorageCommand,
 		Usage: "storage [list] or storage load [DIR]",
 		Description: "This command controls the images that are considered" +
-			"database images. This does not mean that all these images have some" +
-			"precomputed data, like histograms. Only that they were found as" +
-			"possible images. You have to use other commands to load precomputed" +
-			"data.\n\nIf \"list\" is used a list of all images will be printed" +
-			"note that this can be quite large\n\n" +
-			"if load is used the image storage will be initialized with images from" +
-			"the directory (working directory if no image provided). All previously" +
-			"loaded images will be removed from the storage.",
+			" database images. This does not mean that all these images have some" +
+			" precomputed data, like histograms. Only that they were found as" +
+			" possible images. You have to use other commands to load precomputed" +
+			" data.\n\nIf \"list\" is used a list of all images will be printed" +
+			" note that this can be quite large\n\n" +
+			"If load is used the image storage will be initialized with images from" +
+			" the directory (working directory if no image provided). All previously" +
+			" loaded images will be removed from the storage.",
 	}
 	cmdMap["gch"] = gomosaic.Command{
 		Exec:  gomosaic.GCHCommand,
 		Usage: "gch create [k] or gch TODO",
 		Description: "Used to administrate global color histograms (GCHs)\n\n" +
 			"If \"create\" is used GCHs are created for all images in the current" +
-			"storage. The optional argument k must be a number between 1 and 256." +
-			"See usage documentation / Wiki for details about this value. 8 is the" +
-			"default value and should be fine.",
+			" storage. The optional argument k must be a number between 1 and 256." +
+			" See usage documentation / Wiki for details about this value. 8 is the" +
+			" default value and should be fine.",
 	}
 
 	cmdMap["mosaic"] = gomosaic.Command{
-		Exec:        gomosaic.MosaicCommand,
-		Usage:       "TODO",
-		Description: "TODO",
+		Exec:  gomosaic.MosaicCommand,
+		Usage: "mosaic <in> <out> <metric> <tiles> [dimension]",
+		Description: "Creates a mosaic based on global color histograms (GCHs)." +
+			" in is the path to the query image, out the path to the output image" +
+			" (i.e. mosaic), metric is of the form gch-metric, e.g. gch-cosine." +
+			" a list of supported metrics is given below. tiles describes the number" +
+			" of tiles to use in the mosaic, for example \"30x20\" creates 30 times 20" +
+			" tiles (30 in x and 20 in y direction). dimension is optional a describes" +
+			" the dimensions of the output image. If omitted the dimensions of the input" +
+			" are used. For example 1024x768 creates a mosaic with 1024 width and 768" +
+			" height. A value can be omitted and the ratio of the query image is retained." +
+			" \"1024x\" means a mosaic with width 1024 and the height is computed by" +
+			" the query ratio. Also works in the other direction like \"x768\".\n\n" +
+			"Example Usage: \"mosaic in.jpg out.jpg gch-cosine 20x30 1024x768\". Valid " +
+			" metrics (each with prefix \"gch-\" like \"gch-cosine\"):\n\n" +
+			strings.Join(gomosaic.GetHistogramMetricNames(), " "),
 	}
 
 	// add exit command
@@ -247,8 +260,12 @@ func helpCommand(state *gomosaic.ExecutorState, args ...string) error {
 	for _, key := range keys {
 		cmd := cmdMap[key]
 		fmt.Println()
-		fmt.Println("Usage:", cmd.Usage)
-		fmt.Println(cmd.Description)
+		fmt.Println("  Usage:", cmd.Usage)
+		// split, looks nicer
+		split := strings.Split(cmd.Description, "\n")
+		for _, line := range split {
+			fmt.Printf("    %s\n", line)
+		}
 	}
 	return nil
 }
