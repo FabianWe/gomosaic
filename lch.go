@@ -217,6 +217,16 @@ func (s FiveLCHScheme) GetParts(img image.Image) ([][]image.Image, error) {
 	return res, nil
 }
 
+// CreateLCHs creates histograms for all images in the ids list and loads the
+// images through the given storage.
+// If you want to create all histograms for a given storage you can use
+// CreateAllLCHs as a shortcut.
+// It runs the creation of LCHs concurrently (how many go routines run
+// concurrently can be controlled by numRoutines).
+// k is the number of sub-divisons as described in the histogram type,
+// If normalized is true the normalized histograms are computed.
+// progress is a function that is called to inform about the progress,
+// see doucmentation for ProgressFunc.
 func CreateLCHs(scheme LCHScheme, ids []ImageID, storage ImageStorage, normalize bool,
 	k uint, numRoutines int, progress ProgressFunc) ([]*LCH, error) {
 	if numRoutines <= 0 {
@@ -289,4 +299,51 @@ func CreateAllLCHs(scheme LCHScheme, storage ImageStorage, normalize bool,
 type LCHStorage interface {
 	// GetLCH returns the LCH for a previously registered ImageID.
 	GetLCH(id ImageID) (*LCH, error)
+
+	// Divisions returns the number of sub-divisions used in the gchs of an LCH.
+	Divisions() uint
+
+	// SchemeSize returns the number of gchs stored for each lch.
+	SchemeSize() uint
+}
+
+// MemoryLCHStorage implements LCHStorage by keeping a list of LCHs in memory.
+type MemoryLCHStorage struct {
+	LCHs []*LCH
+	K    uint
+	Size uint
+}
+
+// NewMemoryLCHStorage returns a new memory LCH storage storing LCHs of size
+// schemeSize with k sub-divisions. Capacity is the capacity of the underlying
+// histogram array, negative values yield to a default capacity.
+func NewMemoryLCHStorage(k, schemeSize uint, capacity int) *MemoryLCHStorage {
+	if capacity < 0 {
+		capacity = 100
+	}
+	return &MemoryLCHStorage{
+		LCHs: make([]*LCH, 0, capacity),
+		K:    k,
+		Size: schemeSize,
+	}
+}
+
+// GetLCH implements the LCHStorage interface function by returning the LCH
+// on position id in the list.
+// If id is not a valid position inside the the list an error is returned.
+func (s *MemoryLCHStorage) GetLCH(id ImageID) (*LCH, error) {
+	if int(id) < 0 || int(id) >= len(s.LCHs) {
+		return nil, fmt.Errorf("LCH for id %d not registered", id)
+	}
+	return s.LCHs[id], nil
+}
+
+// Divisions returns the number of sub-divisions k.
+func (s *MemoryLCHStorage) Divisions() uint {
+	return s.K
+}
+
+// SchemeSize returns the number of GCHs stored for each LCH in the storage.
+func (s *MemoryLCHStorage) SchemeSize() uint {
+	return s.Size
 }
