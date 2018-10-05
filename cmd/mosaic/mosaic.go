@@ -18,15 +18,51 @@ import (
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"os"
+	"strings"
 	// Since we're not in the gomosaic package we have to import it
 	"github.com/FabianWe/gomosaic"
 
 	log "github.com/sirupsen/logrus"
 )
 
+func usage() {
+
+}
+
 func main() {
-	repl()
+	if len(os.Args) == 1 {
+		repl()
+	}
+	switch os.Args[1] {
+	case "repl", "--repl":
+		repl()
+	case "exec", "execute", "--exec", "--execute":
+		// read commands and execute them, assume separation by semicolon
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Error: exec requires a command to execute")
+			usage()
+			os.Exit(1)
+		}
+		// now join them by \n so that scanner reads them correctly
+		cmds := strings.Replace(os.Args[2], ",", "\n", -1)
+		r := strings.NewReader(cmds)
+		script(r)
+	case "script", "run", "--script", "--run":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Error: script requires a script to execute")
+			usage()
+			os.Exit(1)
+		}
+		// read file and execute
+		f, err := os.Open(os.Args[2])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error: Can't open script", err)
+		}
+		defer f.Close()
+		script(f)
+	}
 }
 
 var cmdMap gomosaic.CommandMap
@@ -118,9 +154,21 @@ func repl() {
 	// panics of Init in ReplHandler
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Unable to initialize engine or some other error or bug! Exiting.")
+			fmt.Fprintln(os.Stderr, "Unable to initialize engine or some other error or bug! Exiting.")
 			os.Exit(1)
 		}
 	}()
 	gomosaic.Execute(gomosaic.ReplHandler{}, cmdMap)
+}
+
+func script(r io.Reader) {
+	// panics of Init in ScriptHandler
+	h := gomosaic.NewScriptHandler(r)
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Unable to initialize engine or some other error or bug! Exiting.")
+			os.Exit(1)
+		}
+	}()
+	gomosaic.Execute(h, cmdMap)
 }

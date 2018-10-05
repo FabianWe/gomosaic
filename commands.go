@@ -839,3 +839,72 @@ func (h ReplHandler) OnError(s *ExecutorState, err error, cmd Command) bool {
 func (h ReplHandler) OnScanErr(s *ExecutorState, err error) {
 	fmt.Println("Error while reading:", err.Error())
 }
+
+type ScriptHandler struct {
+	Source io.Reader
+}
+
+func NewScriptHandler(source io.Reader) ScriptHandler {
+	return ScriptHandler{Source: source}
+}
+
+// Init creates an initial ExecutorState. It creates a new mapper and
+// image database and sets the working directory to the current directory.
+// This method might panic if something with filepath is wrong, this should
+// however usually not be the case.
+func (h ScriptHandler) Init() *ExecutorState {
+	// seems reasonable
+	initialRoutines := runtime.NumCPU() * 2
+	if initialRoutines <= 0 {
+		// don't know if this can happen, better safe then sorry
+		initialRoutines = 4
+	}
+	dir, err := filepath.Abs(".")
+	if err != nil {
+		panic(fmt.Errorf("Unable to retrieve path: %s", err.Error()))
+	}
+	mapper := NewFSMapper()
+	return &ExecutorState{
+		// dir is always an absolute path
+		WorkingDir:  dir,
+		NumRoutines: initialRoutines,
+		Mapper:      mapper,
+		ImgStorage:  NewFSImageDB(mapper),
+		GCHStorage:  nil,
+		Verbose:     true,
+		In:          h.Source,
+		Out:         os.Stdout,
+	}
+}
+
+func (h ScriptHandler) Start(s *ExecutorState) {}
+
+func (h ScriptHandler) Before(s *ExecutorState) {}
+
+func (h ScriptHandler) After(s *ExecutorState) {}
+
+func (h ScriptHandler) OnParseErr(s *ExecutorState, err error) bool {
+	fmt.Fprintln(os.Stderr, "Syntax error:", err)
+	return false
+}
+
+func (h ScriptHandler) OnInvalidCmd(s *ExecutorState, cmd string) bool {
+	fmt.Fprintf(os.Stderr, "Invalid command \"%s\"\n", cmd)
+	return false
+}
+
+func (h ScriptHandler) OnSuccess(s *ExecutorState, cmd Command) {}
+
+func (h ScriptHandler) OnError(s *ExecutorState, err error, cmd Command) bool {
+	if err == ErrCmdSyntaxErr {
+		fmt.Fprintln(os.Stderr, "Error: Invalid syntax for command.")
+		fmt.Fprintln(os.Stderr, "Usage:", cmd.Usage)
+	} else {
+		fmt.Fprintln(os.Stderr, "Error while executing command:", err.Error())
+	}
+	return false
+}
+
+func (h ScriptHandler) OnScanErr(s *ExecutorState, err error) {
+	fmt.Fprintln(os.Stderr, "Error while reading:", err.Error())
+}
