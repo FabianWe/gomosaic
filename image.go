@@ -157,6 +157,27 @@ func GetInterP(quality uint) resize.InterpolationFunction {
 	}
 }
 
+// InterPString returns a string representation of the interpolation function
+// since resize doesn't seem to provide a String() function.
+func InterPString(interP resize.InterpolationFunction) string {
+	switch interP {
+	case resize.NearestNeighbor:
+		return "NearestNeighbor"
+	case resize.Bilinear:
+		return "Bilinear"
+	case resize.Bicubic:
+		return "Bicubic"
+	case resize.MitchellNetravali:
+		return "MitchellNetravali"
+	case resize.Lanczos2:
+		return "Lanczos2"
+	case resize.Lanczos3:
+		return "Lanczos3"
+	default:
+		return fmt.Sprintf("InterpolationFunction(%d)", interP)
+	}
+}
+
 var (
 	// DefaultResizer is the resizer that is used by default, if you're
 	// looking for a resizer default argument this seems useful.

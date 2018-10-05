@@ -31,6 +31,7 @@ import (
 	"time"
 
 	homedir "github.com/mitchellh/go-homedir"
+	"github.com/nfnt/resize"
 )
 
 var (
@@ -99,6 +100,9 @@ type ExecutorState struct {
 	// The higher the value the better the quality. We use a default quality of
 	// 100.
 	JPGQuality int
+
+	// InterP is the interpolation functions used when resizing the images.
+	InterP resize.InterpolationFunction
 }
 
 // GetPath returns the absolute path given some other path.
@@ -381,12 +385,14 @@ func PwdCommand(state *ExecutorState, args ...string) error {
 	return nil
 }
 
+// StatsCommand is a command that prints variable / value pairs.
 func StatsCommand(state *ExecutorState, args ...string) error {
 	m := map[string]interface{}{
 		"routines":     state.NumRoutines,
 		"verbose":      state.Verbose,
 		"cut":          state.CutMosaic,
 		"jpeg-quality": state.JPGQuality,
+		"interp":       InterPString(state.InterP),
 	}
 	if len(args) == 1 {
 		// print specific value
@@ -399,7 +405,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 		// print all values
 		// keep order deterministic
 		keys := make([]string, 0, len(m))
-		for k, _ := range m {
+		for k := range m {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -411,6 +417,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 	return nil
 }
 
+// SetVarCommand sets a variable to a new value.
 func SetVarCommand(state *ExecutorState, args ...string) error {
 	if len(args) != 2 {
 		return errors.New("Invalid set syntax: Requires variable and value. For a list of variables use \"stats\"")
@@ -450,6 +457,17 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 			return fmt.Errorf("Invalid value for jpeg-quality (must be int between 1 and 100): %d", val)
 		}
 		state.JPGQuality = val
+		return nil
+	case "interp":
+		val, parseErr := strconv.Atoi(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for interpolation function, must be integer >= 0: %s", parseErr.Error())
+		}
+		if val < 0 {
+			return fmt.Errorf("Invalid value for interpolation function, must be integer >= 0: %d", val)
+		}
+		interP := GetInterP(uint(val))
+		state.InterP = interP
 		return nil
 	default:
 		return fmt.Errorf("Invalid variable \"%s\". For a list use \"stats\"", name)
@@ -818,7 +836,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		divider.Cut = state.CutMosaic
 		mosaicDist := divider.Divide(mosaicBounds)
 		mosaic, mosaicErr := ComposeMosaic(state.ImgStorage, selection, mosaicDist,
-			DefaultResizer, ForceResize, state.NumRoutines)
+			NewNfntResizer(state.InterP), ForceResize, state.NumRoutines)
 		if mosaicErr != nil {
 			return mosaicErr
 		}
@@ -935,6 +953,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		Out:         os.Stdout,
 		CutMosaic:   false,
 		JPGQuality:  100,
+		InterP:      resize.Lanczos3,
 	}
 }
 
@@ -1012,6 +1031,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		Out:         os.Stdout,
 		CutMosaic:   false,
 		JPGQuality:  100,
+		InterP:      resize.Lanczos3,
 	}
 }
 
