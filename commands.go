@@ -75,6 +75,15 @@ type ExecutorState struct {
 
 	// Out is used to write state information.
 	Out io.Writer
+
+	// Option / config part
+
+	// CutMosaic describes whether the mosaic should be "cut".
+	// Cutting means to cut the resulting image s.t. it fits  the results bounds.
+	// Example: Consider you want to create an image with width 950 you want 10
+	// tiles in this direction. This means that
+	// TODO look this up and then check creation procedure...
+	CutMosaic bool
 }
 
 // GetPath returns the absolute path given some other path.
@@ -207,7 +216,6 @@ func Execute(handler CommandHandler, commandMap CommandMap) {
 				handler.OnSuccess(state, nextCmd)
 			} else {
 				// execution of command failed
-				// TODO insert error here
 				if !handler.OnError(state, execErr, nextCmd) {
 					return
 				}
@@ -461,6 +469,9 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 	}
 }
 
+// TODO stuff here should be moved to other functions to avoid repeating code
+// later...
+
 // TODO doc when finished
 func GCHCommand(state *ExecutorState, args ...string) error {
 	switch {
@@ -608,6 +619,9 @@ func saveImage(file string, img image.Image) error {
 func MosaicCommand(state *ExecutorState, args ...string) error {
 	// TODO test if histograms empty, test if images empty...
 	// mosaic in.png out.png gch-... tilesXxtilesY [outDimensions]
+	if int(state.ImgStorage.NumImages()) == 0 {
+		return errors.New("No images in storage, use \"storage load\"")
+	}
 	switch {
 	case len(args) > 3:
 		if !JPGAndPNG(filepath.Ext(args[1])) {
@@ -617,6 +631,9 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		outPath, outPathErr := state.GetPath(args[1])
 		if outPathErr != nil {
 			return outPathErr
+		}
+		if state.GCHStorage == nil {
+			return errors.New("No GCH data loaded, use \"gch create\" or \"gch load\"")
 		}
 		selectionStr := args[2]
 		// only gch supported atm
@@ -701,10 +718,9 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		start = time.Now()
 		// create mosaic tiles, for this create a new divider and a distribution
 		mosaicBounds := image.Rect(0, 0, mosaicWidth, mosaicHeight)
-		// TODO make this an option
 		// TODO check again with compose if this is okay
 		// TODO check again all requirements
-		divider.Cut = false
+		divider.Cut = state.CutMosaic
 		mosaicDist := divider.Divide(mosaicBounds)
 		// TODO resizer should be an option
 		mosaic, mosaicErr := ComposeMosaic(state.ImgStorage, selection, mosaicDist,
@@ -799,6 +815,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		Verbose:     true,
 		In:          os.Stdin,
 		Out:         os.Stdout,
+		CutMosaic:   false,
 	}
 }
 
@@ -874,6 +891,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		Verbose:     true,
 		In:          h.Source,
 		Out:         os.Stdout,
+		CutMosaic:   false,
 	}
 }
 
@@ -907,4 +925,45 @@ func (h ScriptHandler) OnError(s *ExecutorState, err error, cmd Command) bool {
 
 func (h ScriptHandler) OnScanErr(s *ExecutorState, err error) {
 	fmt.Fprintln(os.Stderr, "Error while reading:", err.Error())
+}
+
+// ReaderFromCmdLines returns a reader for a script source that reads the
+// content of the combined lines.
+func ReaderFromCmdLines(lines []string) io.Reader {
+	combined := strings.Join(lines, "\n")
+	return strings.NewReader(combined)
+}
+
+// Parameterized is used to transform parameterized commands into executable
+// commands, that means replacing variables $i with the provided argument.
+// Example:
+// The command "gch load $1" can be called with one argument that will replace
+// the placeholder $1.
+// It should work with an arbitrary number of variables (let's hope so).
+//
+// The current implementation works by reading the whole original reader and
+// then transforming the elements, given that scripts are not too long the
+// overhead should be manageable.
+//
+// If no parameters are given it is best practise to avoid calling this method
+// and use the original reader.
+func Parameterized(r io.Reader, args ...string) (io.Reader, error) {
+	// create replacer that replaces each $i by args[i-1]
+	replaceArgs := make([]string, 0, 2*len(args))
+	for i := len(args) - 1; i >= 0; i-- {
+		replaceArgs = append(replaceArgs, fmt.Sprintf("$%d", i+1), args[i])
+	}
+	replacer := strings.NewReplacer(replaceArgs...)
+	lines := make([]string, 0, 20)
+	// iterate over each line and perform replacement
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = replacer.Replace(line)
+		lines = append(lines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return ReaderFromCmdLines(lines), nil
 }

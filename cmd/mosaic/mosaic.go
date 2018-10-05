@@ -28,7 +28,7 @@ import (
 )
 
 func usage() {
-
+	fmt.Println("Usage:", os.Args[0], "[--version] [--help] [--repl] [--run <path>] [--execute <command>] ")
 }
 
 func main() {
@@ -36,32 +36,36 @@ func main() {
 		repl()
 	}
 	switch os.Args[1] {
+	case "--help", "-h":
+		usage()
 	case "repl", "--repl":
 		repl()
 	case "exec", "execute", "--exec", "--execute":
 		// read commands and execute them, assume separation by semicolon
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "Error: exec requires a command to execute")
-			usage()
+			fmt.Fprintln(os.Stderr, "Error: exec requires a sequence of commands to execute")
 			os.Exit(1)
 		}
 		// now join them by \n so that scanner reads them correctly
 		cmds := strings.Replace(os.Args[2], ",", "\n", -1)
 		r := strings.NewReader(cmds)
-		script(r)
+		script(r, os.Args[3:]...)
 	case "script", "run", "--script", "--run":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "Error: script requires a script to execute")
-			usage()
+			fmt.Fprintln(os.Stderr, "Error: script requires a script file to execute")
 			os.Exit(1)
 		}
 		// read file and execute
 		f, err := os.Open(os.Args[2])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error: Can't open script", err)
+			os.Exit(1)
 		}
 		defer f.Close()
-		script(f)
+		script(f, os.Args[3:]...)
+	default:
+		fmt.Fprintf(os.Stderr, "Invalid command \"%s\"\n", os.Args[1])
+		os.Exit(1)
 	}
 }
 
@@ -186,12 +190,22 @@ func repl() {
 	gomosaic.Execute(gomosaic.ReplHandler{}, cmdMap)
 }
 
-func script(r io.Reader) {
+func script(r io.Reader, args ...string) {
+	//  check if args are given
+	if len(args) > 0 {
+		// parameterize lines
+		var readErr error
+		r, readErr = gomosaic.Parameterized(r, args...)
+		if readErr != nil {
+			fmt.Fprintln(os.Stderr, "Error: Can't read script", readErr)
+			os.Exit(1)
+		}
+	}
 	// panics of Init in ScriptHandler
 	h := gomosaic.NewScriptHandler(r)
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Unable to initialize engine or some other error or bug! Exiting.")
+			fmt.Fprintln(os.Stderr, "Unable to initialize engine or some other error or bug! Exiting.")
 			os.Exit(1)
 		}
 	}()

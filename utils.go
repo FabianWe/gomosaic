@@ -27,6 +27,9 @@ const (
 	// Debug is true if code should be compiled in debug mode, printing
 	// more stuff and performing checks.
 	Debug = true
+
+	// Version is the version of gomosaic.
+	Version = "1.0"
 )
 
 var (

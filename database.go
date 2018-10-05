@@ -305,11 +305,15 @@ type HistogramFSEntry struct {
 // histograms to HistogramStorage, maybe perform some tests if all images
 // in the database are present in the controller.
 //
+// It also has a version field that is set to the Version variable when saving.
+// This can be useful if the definition should ever change.
+//
 // See MissingEntries, AddtionalEntries and MemHistStorageFromFSMapper for
 // some examples.
 type HistogramFSController struct {
 	Entries []HistogramFSEntry
 	K       uint
+	Version string
 }
 
 // NewHistogramFSController creates an empty file system controller with the
@@ -358,6 +362,7 @@ func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramSt
 
 // WriteGobFile writes the histograms to a file encoded gob format.
 func (c *HistogramFSController) WriteGobFile(path string) error {
+	c.Version = Version
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -383,6 +388,7 @@ func (c *HistogramFSController) ReadGobFile(path string) error {
 
 // WriteJSON writes the histograms to  a file encoded in json format.
 func (c *HistogramFSController) WriteJSON(path string) error {
+	c.Version = Version
 	f, err := os.Create(path)
 	if err != nil {
 		return err
