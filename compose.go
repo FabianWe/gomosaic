@@ -192,20 +192,44 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	resBounds := image.Rect(0, 0, lastTile.Max.X, lastTile.Max.Y)
 	res = image.NewRGBA(resBounds)
 	cache := NewImageCache(ImageCacheSize)
-	for i := 0; i < numTilesVert; i++ {
-		tilesCol := symbolicTiles[i]
-		divisionCol := mosaicDivison[i]
-		lenCol := len(tilesCol)
-		for j := 0; j < lenCol; j++ {
-			tileArea := divisionCol[j]
-			dbImage := tilesCol[j]
-			if dbImage == NoImageID {
-				log.WithFields(log.Fields{
-					"area": tileArea,
-				}).Warn("No image found for tile")
-			} else {
-				insertTile(res, tileArea, storage, dbImage, resizer, s, cache)
+
+	type job struct {
+		i, j int
+	}
+	jobs := make(chan job, BufferSize)
+	done := make(chan bool, BufferSize)
+
+	for w := 0; w < numRoutines; w++ {
+		go func() {
+			for next := range jobs {
+				tilesCol, divisionCol := symbolicTiles[next.i], mosaicDivison[next.i]
+				tileArea, dbImage := divisionCol[next.j], tilesCol[next.j]
+				if dbImage == NoImageID {
+					log.WithFields(log.Fields{
+						"area": tileArea,
+					}).Warn("No image found for tile")
+				} else {
+					insertTile(res, tileArea, storage, dbImage, resizer, s, cache)
+				}
+				done <- true
 			}
+		}()
+	}
+
+	// start jobs
+	go func() {
+		for i, tilesCol := range symbolicTiles {
+			for j := 0; j < len(tilesCol); j++ {
+				jobs <- job{i, j}
+			}
+		}
+		close(jobs)
+	}()
+
+	// wait until done
+	for _, tilesCol := range symbolicTiles {
+		for j := 0; j < len(tilesCol); j++ {
+			<-done
 		}
 	}
 
