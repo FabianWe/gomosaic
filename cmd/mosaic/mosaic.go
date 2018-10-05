@@ -68,6 +68,19 @@ func usage() {
 				"For example 1024x or x768.",
 				"Example: --simple ~/Pictures/ input.jpg output.png 20x30 1024x",
 			}},
+		cmdDesc{
+			"--metric", []string{
+				"The same as --simple but with an additional metric argument. All",
+				"arguments are required, to keep the input images dimensions simply",
+				"use \"x\" for the dimension. Valid metrics listed below.",
+				"Example: --metric ~/Pictures/ input.jpg output.png 20x30 x cosine",
+			}},
+		cmdDesc{
+			"--compare", []string{
+				"The same as --simple but output is specified by a directory in which",
+				"several images are saved, computed with different metrics.",
+				"Example: --compare ~/Pictures/ input.jpg ./output/ 20x30 x768",
+			}},
 	}
 
 	for _, desc := range descriptions {
@@ -78,6 +91,9 @@ func usage() {
 			fmt.Println(innerIndent, line)
 		}
 	}
+	fmt.Println()
+	fmt.Println("Available metrics:")
+	fmt.Println(strings.Join(gomosaic.GetHistogramMetricNames(), " "))
 }
 
 func main() {
@@ -116,6 +132,10 @@ func main() {
 		script(f, os.Args[3:]...)
 	case "--simple":
 		simple(os.Args[2:])
+	case "--metric":
+		metric(os.Args[2:])
+	case "--compare":
+		compare(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid command \"%s\"\n", os.Args[1])
 		os.Exit(1)
@@ -245,20 +265,6 @@ func repl() {
 	gomosaic.Execute(gomosaic.ReplHandler{}, cmdMap)
 }
 
-func simple(args []string) {
-	// ~/Pictures/ input.jpg output.png 20x30 1024x
-	switch len(args) {
-	case 4:
-		args = append(args, "x")
-	case 5:
-		// do nothing
-	default:
-		fmt.Fprintln(os.Stderr, "Invalid syntax for --simple, requires 4 or 5 arguments, got", len(args))
-		os.Exit(1)
-	}
-	fromTemplate(gomosaic.RunSimple, args...)
-}
-
 func fromTemplate(template string, args ...string) {
 	r := strings.NewReader(template)
 	script(r, args...)
@@ -284,4 +290,39 @@ func script(r io.Reader, args ...string) {
 		}
 	}()
 	gomosaic.Execute(h, cmdMap)
+}
+
+func simple(args []string) {
+	// ~/Pictures/ input.jpg output.png 20x30 1024x
+	switch len(args) {
+	case 4:
+		args = append(args, "x")
+	case 5:
+		// do nothing
+	default:
+		fmt.Fprintln(os.Stderr, "Invalid syntax for --simple, requires 4 or 5 arguments, got", len(args))
+		os.Exit(1)
+	}
+	fromTemplate(gomosaic.RunSimple, args...)
+}
+
+func metric(args []string) {
+	if len(args) != 6 {
+		fmt.Fprintln(os.Stderr, "Invalid syntax for --metric, requires exactly 6 arguments, got", len(args))
+		os.Exit(1)
+	}
+	fromTemplate(gomosaic.RunMetric, args...)
+}
+
+func compare(args []string) {
+	switch len(args) {
+	case 4:
+		args = append(args, "x")
+	case 5:
+		// do nothing
+	default:
+		fmt.Fprintln(os.Stderr, "Invalid syntax for --compare, requires 4 or 5 arguments, got", len(args))
+		os.Exit(1)
+	}
+	fromTemplate(gomosaic.CompareMetrics, args...)
 }

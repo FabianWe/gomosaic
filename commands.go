@@ -706,6 +706,9 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		}
 		dist := divider.Divide(img.Bounds())
 		selector := GCHSelector(state.GCHStorage, metric, state.NumRoutines)
+		if state.Verbose {
+			fmt.Fprintln(state.Out, "Selecting images")
+		}
 		selection, selectionErr := selector.SelectImages(state.ImgStorage, img, dist)
 		if selectionErr != nil {
 			return selectionErr

@@ -15,7 +15,6 @@
 package gomosaic
 
 import (
-	"fmt"
 	"math"
 	"strings"
 )
@@ -158,7 +157,6 @@ func CanberraDistance(p, q []float64) float64 {
 			res += (numerator / denominator)
 		}
 	}
-	fmt.Println(res)
 	return res
 }
 
