@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
 	// Since we're not in the gomosaic package we have to import it
 	"github.com/FabianWe/gomosaic"
 
@@ -28,7 +29,55 @@ import (
 )
 
 func usage() {
-	fmt.Println("Usage:", os.Args[0], "[--version] [--help] [--repl] [--run <path>] [--execute <command>] ")
+	prefix := "Usage " + os.Args[0]
+	prefixLength := utf8.RuneCountInString(prefix)
+	prefixReplace := strings.Repeat(" ", prefixLength)
+	fmt.Println(prefix, "[--version | -v] [--help | -h] [--repl] [--run <path> [params...]] [--execute <command> [params...]] ")
+	fmt.Println(prefixReplace, "[--simple <db-path> <input> <output> <tilesX x tilesY> [width x height]]")
+	fmt.Println(prefixReplace, "[--metric <db-path> <input> <output> <tilesX x tilesY> <metric>]")
+	fmt.Println(prefixReplace, "[--compare <db-path> <input> <output-dir> <tilesX x tilesY>]")
+	fmt.Println()
+	fmt.Println("The commands mean the following:")
+	fmt.Println()
+	indent := strings.Repeat(" ", 2)
+	type cmdDesc struct {
+		cmd         string
+		description []string
+	}
+	descriptions := []cmdDesc{
+		cmdDesc{"--version", []string{"Show version"}},
+		cmdDesc{"--repl", []string{"Run interactive mode (Read–Eval–Print Loop)"}},
+		cmdDesc{"--run", []string{
+			"Run commands in the specified mosaic script file. Additional arguments",
+			"are used for variable replacements.",
+		}},
+		cmdDesc{
+			"--execute", []string{
+				"Execute commands specified as the command argument. Commands must",
+				"be separated by \";\".Additional arguments are used for variable",
+				"replacements.",
+			}},
+		cmdDesc{
+			"--simple", []string{
+				"Create a mosaic from images in the directory db-path. The image is",
+				"created from image input and the mosaic written to output. tilesX",
+				"and tilesY specify the number of tiles in the mosaic image. The",
+				"optional width and height specify the size of the output, if omitted",
+				"the mosaic has the same width and height as the input. You can also",
+				"specify only width or height and keep the ratio of the input image.",
+				"For example 1024x or x768.",
+				"Example: --simple ~/Pictures/ input.jpg output.png 20x30 1024x",
+			}},
+	}
+
+	for _, desc := range descriptions {
+		fmt.Printf("%s%s %s\n", indent, desc.cmd, desc.description[0])
+		innerIndent := strings.Repeat(" ", 2+len(desc.cmd))
+		// space included automatically by println later
+		for _, line := range desc.description[1:] {
+			fmt.Println(innerIndent, line)
+		}
+	}
 }
 
 func main() {
@@ -38,9 +87,11 @@ func main() {
 	switch os.Args[1] {
 	case "--help", "-h":
 		usage()
-	case "repl", "--repl":
+	case "--version", "-v":
+		fmt.Println("gomsaic version", gomosaic.Version)
+	case "--repl":
 		repl()
-	case "exec", "execute", "--exec", "--execute":
+	case "--execute":
 		// read commands and execute them, assume separation by semicolon
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "Error: exec requires a sequence of commands to execute")
@@ -50,7 +101,7 @@ func main() {
 		cmds := strings.Replace(os.Args[2], ",", "\n", -1)
 		r := strings.NewReader(cmds)
 		script(r, os.Args[3:]...)
-	case "script", "run", "--script", "--run":
+	case "--script", "--run":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "Error: script requires a script file to execute")
 			os.Exit(1)
@@ -63,6 +114,8 @@ func main() {
 		}
 		defer f.Close()
 		script(f, os.Args[3:]...)
+	case "--simple":
+		simple(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid command \"%s\"\n", os.Args[1])
 		os.Exit(1)
@@ -174,7 +227,9 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License.`
+limitations under the License.
+
+For more details and third-party licenses see <https://github.com/FabianWe/gomosaic>`
 	fmt.Println(license)
 	return nil
 }
@@ -188,6 +243,25 @@ func repl() {
 		}
 	}()
 	gomosaic.Execute(gomosaic.ReplHandler{}, cmdMap)
+}
+
+func simple(args []string) {
+	// ~/Pictures/ input.jpg output.png 20x30 1024x
+	switch len(args) {
+	case 4:
+		args = append(args, "x")
+	case 5:
+		// do nothing
+	default:
+		fmt.Fprintln(os.Stderr, "Invalid syntax for --simple, requires 4 or 5 arguments, got", len(args))
+		os.Exit(1)
+	}
+	fromTemplate(gomosaic.RunSimple, args...)
+}
+
+func fromTemplate(template string, args ...string) {
+	r := strings.NewReader(template)
+	script(r, args...)
 }
 
 func script(r io.Reader, args ...string) {

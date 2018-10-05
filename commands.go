@@ -927,6 +927,13 @@ func (h ScriptHandler) OnScanErr(s *ExecutorState, err error) {
 	fmt.Fprintln(os.Stderr, "Error while reading:", err.Error())
 }
 
+// ScriptHandlerFromCmds is a function to create a script handler from
+// a predefined set of lines. This allows us for easy execution of predefined
+// scripts.
+func ScriptHandlerFromCmds(lines []string) ScriptHandler {
+	return NewScriptHandler(ReaderFromCmdLines(lines))
+}
+
 // ReaderFromCmdLines returns a reader for a script source that reads the
 // content of the combined lines.
 func ReaderFromCmdLines(lines []string) io.Reader {
@@ -966,4 +973,20 @@ func Parameterized(r io.Reader, args ...string) (io.Reader, error) {
 		return nil, err
 	}
 	return ReaderFromCmdLines(lines), nil
+}
+
+func ParameterizedFromStrings(commands []string, args ...string) io.Reader {
+	// create replacer that replaces each $i by args[i-1]
+	replaceArgs := make([]string, 0, 2*len(args))
+	for i := len(args) - 1; i >= 0; i-- {
+		replaceArgs = append(replaceArgs, fmt.Sprintf("$%d", i+1), args[i])
+	}
+	replacer := strings.NewReplacer(replaceArgs...)
+	lines := make([]string, 0, len(commands))
+	// iterate over each line and perform replacement
+	for _, line := range lines {
+		line = replacer.Replace(line)
+		lines = append(lines, line)
+	}
+	return ReaderFromCmdLines(lines)
 }
