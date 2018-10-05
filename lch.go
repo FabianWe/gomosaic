@@ -15,9 +15,14 @@
 package gomosaic
 
 import (
+	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"image"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -346,4 +351,201 @@ func (s *MemoryLCHStorage) Divisions() uint {
 // SchemeSize returns the number of GCHs stored for each LCH in the storage.
 func (s *MemoryLCHStorage) SchemeSize() uint {
 	return s.Size
+}
+
+// LCHFSEntry is used to store LCHs on the filesystem.
+// It contains the path of the image the LCH was created for as well
+// as the LCH data.
+//
+// It also has a field checksum that is not used yet. Later it can be adjusted
+// s.t. an histgram is stored together with the checksum (e.g. just plain md5
+// encoded with e.g. base64) of the image the histogram was created for.
+// This way we can test if the content of an image has changed, and thus
+// the histogram became invalid. At the moment we don't recognize if an image
+// has changed.
+//
+// This is however not supported at the moment. An empty string signals that
+// no checksum was computed.
+type LCHFSEntry struct {
+	Path     string
+	LCH      *LCH
+	Checksum string
+}
+
+// NewLCHFSEntry returns a new entry with the given content.
+func NewLCHFSEntry(path string, lch *LCH, checksum string) LCHFSEntry {
+	return LCHFSEntry{
+		Path:     path,
+		LCH:      lch,
+		Checksum: checksum,
+	}
+}
+
+// LCHFSController is used to store LCHs (wrapped by LCHFSEntry) on the
+// filesystem.
+//
+// It's the same idea as with HistogramFSController, see details there.
+// Some of the functions implemented for HistogramFSController are not
+// implemented here because they're not needed at the moment. But they could
+// be implemented similar to those in HistogramFSController.
+type LCHFSController struct {
+	Entries []LCHFSEntry
+	K       uint
+	Size    uint
+	Version string
+}
+
+// NewLCHFSController returns an empty file system controller with the given
+// capacity. Too create a new file system controller initialized with some
+// content use CreateLCHFSController.
+func NewLCHFSController(k, schemeSize uint, capacity int) *LCHFSController {
+	if capacity < 0 {
+		capacity = 100
+	}
+	return &LCHFSController{
+		Entries: make([]LCHFSEntry, 0, capacity),
+		K:       k,
+		Size:    schemeSize,
+		Version: Version,
+	}
+}
+
+// CreateLCHFSController creates a histogram filesystem controller given
+// some input data.
+// ids is the list of all image ids to be included in the controler, mapper
+// is used to get the absolute path of an image (stored alongside the LCH
+// data) and the storage is used to lookup the LCHs.
+//
+// If you want to create a fs controller with all ids from a storage you can use
+// IDList to create a list of all ids.
+func CreateLCHFSController(ids []ImageID, mapper *FSMapper, storage LCHStorage) (*LCHFSController, error) {
+	res := NewLCHFSController(storage.Divisions(), storage.SchemeSize(), len(ids))
+	for _, id := range ids {
+		// lookup file name
+		path, ok := mapper.GetPath(id)
+		if !ok {
+			return nil, fmt.Errorf("Can't retrieve path for image with id %d", id)
+		}
+		// lookup lch
+		lch, lchErr := storage.GetLCH(id)
+		if lchErr != nil {
+			return nil, lchErr
+		}
+		res.Entries = append(res.Entries, NewLCHFSEntry(path, lch, ""))
+	}
+	return res, nil
+}
+
+// WriteGobFile writes the LCH to a file encoded gob format.
+func (c *LCHFSController) WriteGobFile(path string) error {
+	// just to be sure
+	c.Version = Version
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	err = enc.Encode(c)
+	return err
+}
+
+// ReadGobFile reads the content of the controller from the specified file.
+// The file must be encoded in gob.
+func (c *LCHFSController) ReadGobFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := gob.NewDecoder(f)
+	err = dec.Decode(c)
+	return err
+}
+
+// WriteJSON writes the LCHs to  a file encoded in json format.
+func (c *LCHFSController) WriteJSON(path string) error {
+	// again, to be sure
+	c.Version = Version
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	err = enc.Encode(c)
+	return err
+}
+
+// ReadJSONFile reads the content of the controller from the specified file.
+// The file must be encoded in json.
+func (c *LCHFSController) ReadJSONFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	err = dec.Decode(c)
+	return err
+}
+
+// ReadFile reads the content of the controller from the specified file.
+// The read method depends on the file extension which must be either .json
+// or .gob.
+func (c *LCHFSController) ReadFile(path string) error {
+	ext := filepath.Ext(path)
+	ext = strings.ToLower(ext)
+	switch ext {
+	case ".json":
+		return c.ReadJSONFile(path)
+	case ".gob":
+		return c.ReadGobFile(path)
+	default:
+		return fmt.Errorf("Unkown file extension for LCH file: %s. Should be \".json\" or \".gob\"", ext)
+	}
+}
+
+// WriteFile writes the content of the controller to a file depending on the
+// file extension hich must be either .json or .gob.
+func (c *LCHFSController) WriteFile(path string) error {
+	ext := filepath.Ext(path)
+	ext = strings.ToLower(ext)
+	switch ext {
+	case ".json":
+		return c.WriteJSON(path)
+	case ".gob":
+		return c.WriteGobFile(path)
+	default:
+		return fmt.Errorf("Unkown file extension for LCH file: %s. Should be \".json\" or \".gob\"", ext)
+	}
+}
+
+// Map computes the mapping filename ↦ lch. That is useful sometimes,
+// especially when computing the diff between this and an FSMapper.
+func (c *LCHFSController) Map() map[string]*LCH {
+	res := make(map[string]*LCH, len(c.Entries))
+	for _, entry := range c.Entries {
+		res[entry.Path] = entry.LCH
+	}
+	return res
+}
+
+// LCHFileName returns the proposed filename for a file containing lchs.
+// When saving LCHFSController instances (that's the type used for storing
+// GCHs) the file should be saved by this file name.
+// The scheme is "lch-scheme-k.(gob|json)".
+// k is the value as defined in histogram and ext is the extension (gob for
+// gob encoded files and json for json encoded files). Scheme is the scheme
+// size, currently implemented are two parting techniques. This naming is
+// ambiguous (someone could come up with another technique to build 5 blocks)
+// but that should be well enough.
+//
+// For example LCHs with 8 sub-divions encoded as json with the 5 parts scheme
+// would be stored in a file "lch-5-8.json".
+func LCHFileName(k, schemeSize uint, ext string) string {
+	if strings.HasPrefix(ext, ".") {
+		ext = ext[1:]
+	}
+	return fmt.Sprintf("lch-%d-%d.%s", k, schemeSize, ext)
 }

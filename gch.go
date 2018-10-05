@@ -46,6 +46,15 @@ type HistogramFSEntry struct {
 	Checksum  string
 }
 
+// NewHistogramFSEntry returns a new entry with the given content.
+func NewHistogramFSEntry(path string, histogram *Histogram, checksum string) HistogramFSEntry {
+	return HistogramFSEntry{
+		Path:      path,
+		Histogram: histogram,
+		Checksum:  checksum,
+	}
+}
+
 // HistogramFSController is used to store histograms (wrapped by
 // HistogramFSEntry) on the filesystem.
 //
@@ -79,6 +88,7 @@ func NewHistogramFSController(capacity int, k uint) *HistogramFSController {
 	return &HistogramFSController{
 		Entries: make([]HistogramFSEntry, 0, capacity),
 		K:       k,
+		Version: Version,
 	}
 }
 
@@ -91,11 +101,8 @@ func NewHistogramFSController(capacity int, k uint) *HistogramFSController {
 // If you want to create a fs controller with all ids from a storage you can use
 // IDList to create a list of all ids.
 func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramStorage) (*HistogramFSController, error) {
-	res := &HistogramFSController{
-		Entries: make([]HistogramFSEntry, len(ids)),
-		K:       storage.Divisions(),
-	}
-	for i, id := range ids {
+	res := NewHistogramFSController(len(ids), storage.Divisions())
+	for _, id := range ids {
 		// lookup file name
 		path, ok := mapper.GetPath(id)
 		if !ok {
@@ -106,7 +113,7 @@ func CreateHistFSController(ids []ImageID, mapper *FSMapper, storage HistogramSt
 		if histErr != nil {
 			return nil, histErr
 		}
-		res.Entries[i] = HistogramFSEntry{Path: path, Histogram: hist}
+		res.Entries = append(res.Entries, NewHistogramFSEntry(path, hist, ""))
 	}
 	return res, nil
 }
@@ -319,8 +326,6 @@ func (c *HistogramFSController) Remove(paths []string) {
 //
 // For example histograms with 8 sub-divions encoded as json would be stored in
 // a file "gch-8.json".
-//
-// Using this scheme makes it easier to find the precomputed data.
 func GCHFileName(k uint, ext string) string {
 	if strings.HasPrefix(ext, ".") {
 		ext = ext[1:]
@@ -348,7 +353,7 @@ func NewMemoryHistStorage(k uint, capacity int) *MemoryHistStorage {
 	}
 }
 
-// GetHistogram implements the HistogramStorage interface method by return
+// GetHistogram implements the HistogramStorage interface function by returning
 // the histogram on position id in the list.
 // If id is not a valid position inside the the list an error is returned.
 func (s *MemoryHistStorage) GetHistogram(id ImageID) (*Histogram, error) {
