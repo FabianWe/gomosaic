@@ -44,6 +44,8 @@ func NewLCH(histograms []*Histogram) *LCH {
 //
 // If the LCHs are of different dimensions or the GCHs inside the LCHs are
 // of different dimensions an error != nil is returned.
+// TODO test if paralellism makes sense here... or is it just too fast to
+// help? But I would prefer "concurrency first"
 func (lch *LCH) Dist(other *LCH, delta HistogramMetric) (float64, error) {
 	if len(lch.Histograms) != len(other.Histograms) {
 		return -1.0, fmt.Errorf("Invalid LCH dimensions: %d != %d",
@@ -98,13 +100,39 @@ func RepairDistribution(distribution TileDivision, numX, numY int) TileDivision 
 	return distribution
 }
 
-// LCHScheme is used to compute a LCH from an image (k is the number of
-// sub-divisons for histogram generation).
+// LCHScheme returns the distribution of an image into sub images.
+// Note that a sub image can be contained in multiple lists and not all lists
+// must be of the same length. For example the four parts scheme: The first
+// list could contain both top sub images. The western list would contain the
+// bot left sub images. They both contain the to-left image.
 //
-// Examples of such schemes: Four parts north, west, south and east or
-// five parts north, west, south, east and center.
+// Schemes always return a fixed number of image lists.
 type LCHScheme interface {
-	ComputLCH(img image.Image, k uint) (*LCH, error)
+	GetParts(img image.Image) ([][]image.Image, error)
+}
+
+// GenLCH computes the LCHs an image. It uses the scheme to compute the image
+// parts and then concurrently creates the GCHs for each list.
+// k and normalize are defined as for the GCH method: k is the number of
+// histogram sub-divisions and if normalize is true the GCHs are normalized.
+func GenLCH(scheme LCHScheme, img image.Image, k uint, normalize bool) (*LCH, error) {
+	dist, distErr := scheme.GetParts(img)
+	if distErr != nil {
+		return nil, distErr
+	}
+	res := make([]*Histogram, len(dist))
+	// for each part compute GCH
+	var wg sync.WaitGroup
+	wg.Add(len(dist))
+	for i, imgList := range dist {
+		go func(index int, list []image.Image) {
+			defer wg.Done()
+			// compute histogram from image list
+			res[index] = GenHistogramFromList(k, normalize, list...)
+		}(i, imgList)
+	}
+	wg.Wait()
+	return NewLCH(res), nil
 }
 
 // FourLCHScheme implements the scheme with four parts: north, west, south and
@@ -119,10 +147,9 @@ func NewFourLCHScheme() FourLCHScheme {
 	return FourLCHScheme{}
 }
 
-// ComputLCH returns exactly four histograms (N, W, S, E).
-func (s FourLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
-	res := make([]*Histogram, 4)
-	// first distribute image into 4 blocks
+// GetParts returns exactly four histograms (N, W, S, E).
+func (s FourLCHScheme) GetParts(img image.Image) ([][]image.Image, error) {
+	// first divide image into 4 blocks
 	// setting cut to false means that these blocks are not necessarily of the
 	// same size.
 	divider := NewFixedNumDivider(2, 2, false)
@@ -133,10 +160,9 @@ func (s FourLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	}
 	imageParts, partsErr := DivideImage(img, parts, 4)
 	if partsErr != nil {
-		return nil, fmt.Errorf("Error computing distribution for LCH: %v", partsErr)
+		return nil, fmt.Errorf("Error computing distribution for LCH: %s", partsErr.Error())
 	}
-
-	var dist [][]image.Image = [][]image.Image{
+	res := [][]image.Image{
 		// north
 		[]image.Image{imageParts[0][0], imageParts[0][1]},
 		// west
@@ -146,18 +172,7 @@ func (s FourLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 		// east
 		[]image.Image{imageParts[0][1], imageParts[1][1]},
 	}
-	// for each part compute GCH
-	var wg sync.WaitGroup
-	wg.Add(len(dist))
-	for i, imgList := range dist {
-		go func(index int, list []image.Image) {
-			defer wg.Done()
-			// compute histogram from image list
-			res[index] = GenHistogramFromList(k, true, list...)
-		}(i, imgList)
-	}
-	wg.Wait()
-	return NewLCH(res), nil
+	return res, nil
 }
 
 // FiveLCHScheme implements the scheme with vie parts: north, west, south,
@@ -172,10 +187,9 @@ func NewFiveLCHScheme() FiveLCHScheme {
 	return FiveLCHScheme{}
 }
 
-// ComputLCH returns exactly five histograms (N, W, S, E, C).
-func (s FiveLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
-	res := make([]*Histogram, 5)
-	// first distribute image into 9 blocks
+// GetParts returns exactly five histograms (N, W, S, E, C).
+func (s FiveLCHScheme) GetParts(img image.Image) ([][]image.Image, error) {
+	// first divide image into 9 blocks
 	// setting cut to false means that these blocks are not necessarily of the
 	// same size.
 	divider := NewFixedNumDivider(3, 3, false)
@@ -186,10 +200,9 @@ func (s FiveLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 	}
 	imageParts, partsErr := DivideImage(img, parts, 9)
 	if partsErr != nil {
-		return nil, fmt.Errorf("Error computing distribution for LCH: %v", partsErr)
+		return nil, fmt.Errorf("Error computing distribution for LCH: %s", partsErr.Error())
 	}
-
-	var dist [][]image.Image = [][]image.Image{
+	res := [][]image.Image{
 		// north
 		[]image.Image{imageParts[0][0], imageParts[0][1], imageParts[0][2]},
 		// west
@@ -201,19 +214,72 @@ func (s FiveLCHScheme) ComputLCH(img image.Image, k uint) (*LCH, error) {
 		// center
 		[]image.Image{imageParts[1][1]},
 	}
-	// for each part compute GCH
-	var wg sync.WaitGroup
-	wg.Add(len(dist))
-	for i, imgList := range dist {
-		go func(index int, list []image.Image) {
-			defer wg.Done()
-			// compute histogram from image list
-			res[index] = GenHistogramFromList(k, true, list...)
-		}(i, imgList)
-	}
-	wg.Wait()
-	return NewLCH(res), nil
+	return res, nil
 }
+
+// func CreateLCHs(scheme LCHScheme, ids []ImageID, storage ImageStorage, normalize bool,
+// 	k uint, numRoutines int, progress ProgressFunc) ([]*LCH, error) {
+// 	if numRoutines <= 0 {
+// 		numRoutines = 1
+// 	}
+//
+// 	numImages := len(ids)
+//
+// 	// any error that occurs sets this variable (first error)
+// 	// this is done later
+// 	var err error
+//
+// 	res := make([]*LCH, numImages)
+// 	jobs := make(chan int, BufferSize)
+// 	errorChan := make(chan error, BufferSize)
+//
+// 	// workers
+// 	for w := 0; w < numRoutines; w++ {
+// 		go func() {
+// 			for next := range jobs {
+// 				image, imageErr := storage.LoadImage(ids[next])
+// 				if imageErr != nil {
+// 					errorChan <- imageErr
+// 					continue
+// 				}
+// 				// TODO add normalize option
+// 				lch, lchErr := scheme.ComputLCH(image, k)
+// 				if lchErr != nil {
+// 					errorChan <- lchErr
+// 					continue
+// 				}
+// 				if normalize {
+// 					// TODO
+// 				}
+// 				res[next] = lch
+// 				errorChan <- nil
+// 			}
+// 		}()
+// 	}
+//
+// 	// create jobs
+// 	go func() {
+// 		for i := 0; i < len(ids); i++ {
+// 			jobs <- i
+// 		}
+// 		close(jobs)
+// 	}()
+//
+// 	// read errors
+// 	for i := 0; i < numImages; i++ {
+// 		nextErr := <-errorChan
+// 		if nextErr != nil && err == nil {
+// 			err = nextErr
+// 		}
+// 		if progress != nil {
+// 			progress(i)
+// 		}
+// 	}
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return res, nil
+// }
 
 // LCHStorage maps image ids to LCHs.
 // By default the histograms of the LCHs should be normalized.

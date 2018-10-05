@@ -255,10 +255,13 @@ func CreateHistograms(ids []ImageID, storage ImageStorage, normalize bool, k uin
 			err = nextErr
 		}
 		if progress != nil {
-			progress(int(i))
+			progress(i)
 		}
 	}
-	return res, err
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // CreateAllHistograms creates all histograms for images in the storage.
