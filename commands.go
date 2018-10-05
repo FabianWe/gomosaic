@@ -727,7 +727,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		mosaicDist := divider.Divide(mosaicBounds)
 		// TODO resizer should be an option
 		mosaic, mosaicErr := ComposeMosaic(state.ImgStorage, selection, mosaicDist,
-			DefaultResizer, ForceResize)
+			DefaultResizer, ForceResize, state.NumRoutines)
 		if mosaicErr != nil {
 			return mosaicErr
 		}

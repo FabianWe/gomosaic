@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"image"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -167,7 +169,11 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 // running concurrently... so would be nice but it's okay?
 // doc: mosaic division must start from(0, 0)
 func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
-	mosaicDivison TileDivision, resizer ImageResizer, s ResizeStrategy) (image.Image, error) {
+	mosaicDivison TileDivision, resizer ImageResizer, s ResizeStrategy,
+	numRoutines int) (image.Image, error) {
+	if numRoutines <= 0 {
+		numRoutines = 1
+	}
 	// TODO is this correct???
 	numTilesVert := len(symbolicTiles)
 
@@ -193,8 +199,13 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 		for j := 0; j < lenCol; j++ {
 			tileArea := divisionCol[j]
 			dbImage := tilesCol[j]
-			// TODO NoImageID
-			insertTile(res, tileArea, storage, dbImage, resizer, s, cache)
+			if dbImage == NoImageID {
+				log.WithFields(log.Fields{
+					"area": tileArea,
+				}).Warn("No image found for tile")
+			} else {
+				insertTile(res, tileArea, storage, dbImage, resizer, s, cache)
+			}
 		}
 	}
 

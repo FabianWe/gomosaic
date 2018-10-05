@@ -129,7 +129,7 @@ func main() {
 	// compose mosaic
 	fmt.Println("Composing mosaic image")
 	mosaic, mosaicErr := gomosaic.ComposeMosaic(storage, comp, dist,
-		gomosaic.DefaultResizer, gomosaic.ForceResize)
+		gomosaic.DefaultResizer, gomosaic.ForceResize, 8)
 	execTime = time.Since(start)
 	if mosaicErr != nil {
 		log.Fatal(mosaicErr)
