@@ -173,12 +173,12 @@ func init() {
 	}
 	cmdMap["cd"] = gomosaic.Command{
 		Exec:        gomosaic.CdCommand,
-		Usage:       "cd <DIR>",
+		Usage:       "cd <dir>",
 		Description: "Change working directory to the specified directory",
 	}
 	cmdMap["storage"] = gomosaic.Command{
 		Exec:  gomosaic.ImageStorageCommand,
-		Usage: "storage [list] or storage load [DIR]",
+		Usage: "storage [list] or storage load [dir]",
 		Description: "This command controls the images that are considered" +
 			" database images. This does not mean that all these images have some" +
 			" precomputed data, like histograms. Only that they were found as" +
@@ -191,14 +191,19 @@ func init() {
 	}
 	cmdMap["gch"] = gomosaic.Command{
 		Exec:  gomosaic.GCHCommand,
-		Usage: "gch create [k] or gch TODO",
+		Usage: "gch create [k] or gch load <file> or gch save <file>",
 		Description: "Used to administrate global color histograms (GCHs)\n\n" +
 			"If \"create\" is used GCHs are created for all images in the current" +
 			" storage. The optional argument k must be a number between 1 and 256." +
 			" See usage documentation / Wiki for details about this value. 8 is the" +
-			" default value and should be fine.",
+			" default value and should be fine.\n\nsave and load commands load files" +
+			" containing GHCs from a file.",
 	}
-
+	cmdMap["lch"] = gomosaic.Command{
+		Exec:        gomosaic.LCHCommand,
+		Usage:       "lch create <k> <scheme> or lch load <file> or lch save <file>",
+		Description: "TODO",
+	}
 	cmdMap["mosaic"] = gomosaic.Command{
 		Exec:  gomosaic.MosaicCommand,
 		Usage: "mosaic <in> <out> <metric> <tiles> [dimension]",

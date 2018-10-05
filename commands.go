@@ -66,8 +66,13 @@ type ExecutorState struct {
 
 	// GCHStorage stores the global color histograms. Whenever new images are
 	// loaded the old histograms become invalid (set to nil again) and must
-	// be reloaded.
+	// be reloaded / created.
 	GCHStorage *MemoryHistStorage
+
+	// LCHStorage stores the local color histograms. Whenever new images are
+	// loaded the old histograms become invalid (set to nil again) and must
+	// be reloaded / created.
+	LCHStorage *MemoryLCHStorage
 
 	// Verbose is true if detailed output should be generated.
 	Verbose bool
@@ -563,10 +568,13 @@ func ImageStorageCommand(state *ExecutorState, args ...string) error {
 		state.Mapper.Clear()
 		// make gchs invalid
 		state.GCHStorage = nil
+		// make lchs invalid
+		state.LCHStorage = nil
 		if loadErr := state.Mapper.Load(dir, recursive, JPGAndPNG); loadErr != nil {
 			state.Mapper.Clear()
 			// should not be necessary, just to follow the pattern
 			state.GCHStorage = nil
+			state.LCHStorage = nil
 			return loadErr
 		}
 		fmt.Fprintln(state.Out, "Successfully read", state.Mapper.Len(), "images")
@@ -679,6 +687,62 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 		}
 		state.GCHStorage = memStorage
 		fmt.Fprintln(state.Out, "Histograms have been mapped to image store.")
+		return nil
+	default:
+		return ErrCmdSyntaxErr
+	}
+}
+
+func LCHCommand(state *ExecutorState, args ...string) error {
+	switch {
+	case len(args) < 3:
+		return ErrCmdSyntaxErr
+	case args[0] == "create":
+		// k is the number of subdivions
+		asInt, parseErr := strconv.Atoi(args[1])
+		if parseErr != nil {
+			return parseErr
+		}
+		// validate k: must be >= 1 and <= 256
+		if asInt < 1 || asInt > 256 {
+			return fmt.Errorf("k for LCH must be a value between 1 and 256, got %d", asInt)
+		}
+		k := uint(asInt)
+		// parse scheme size
+		asInt, parseErr = strconv.Atoi(args[2])
+		if parseErr != nil {
+			return parseErr
+		}
+		// now create lch scheme
+		var scheme LCHScheme
+		switch asInt {
+		case 4:
+			scheme = NewFourLCHScheme()
+		case 5:
+			scheme = NewFiveLCHScheme()
+		default:
+			return fmt.Errorf("Invalid scheme size %d: Supported are 4 and 5", asInt)
+		}
+		// create all lchs
+		fmt.Fprintf(state.Out, "Creating LCHs for all images in storage with k = %d sub-divisions and %d parts\n", k, asInt)
+		var progress ProgressFunc
+		if state.Verbose {
+			progress = StdProgressFunc(state.Out, "", int(state.ImgStorage.NumImages()), 100)
+		}
+		start := time.Now()
+		lchs, lchsErr := CreateAllLCHs(scheme, state.ImgStorage,
+			true, k, state.NumRoutines, progress)
+		execTime := time.Since(start)
+		if lchsErr != nil {
+			return lchsErr
+		}
+		// set
+		state.LCHStorage = &MemoryLCHStorage{
+			LCHs: lchs,
+			K:    k,
+			Size: uint(asInt),
+		}
+		fmt.Fprintf(state.Out, "Computed %d LCHs in %v\n", len(lchs), execTime)
 		return nil
 	default:
 		return ErrCmdSyntaxErr
@@ -871,12 +935,12 @@ func init() {
 	}
 	DefaultCommands["cd"] = Command{
 		Exec:        CdCommand,
-		Usage:       "cd <DIR>",
+		Usage:       "cd <dir>",
 		Description: "Change working directory to the specified directory",
 	}
 	DefaultCommands["storage"] = Command{
 		Exec:  ImageStorageCommand,
-		Usage: "storage [list] or storage load [DIR]",
+		Usage: "storage [list] or storage load [dir]",
 		Description: "This command controls the images that are considered" +
 			" database images. This does not mean that all these images have some" +
 			" precomputed data, like histograms. Only that they were found as" +
@@ -889,13 +953,18 @@ func init() {
 	}
 	DefaultCommands["gch"] = Command{
 		Exec:  GCHCommand,
-		Usage: "gch create [k] or gch load <FILE> or gch save <FILE>",
+		Usage: "gch create [k] or gch load <file> or gch save <file>",
 		Description: "Used to administrate global color histograms (GCHs)\n\n" +
 			"If \"create\" is used GCHs are created for all images in the current" +
 			" storage. The optional argument k must be a number between 1 and 256." +
 			" See usage documentation / Wiki for details about this value. 8 is the" +
 			" default value and should be fine.\n\nsave and load commands load files" +
 			" containing GHCs from a file.",
+	}
+	DefaultCommands["lch"] = Command{
+		Exec:        LCHCommand,
+		Usage:       "lch create <k> <scheme> or lch load <file> or lch save <file>",
+		Description: "TODO",
 	}
 	DefaultCommands["mosaic"] = Command{
 		Exec:  MosaicCommand,
@@ -944,6 +1013,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		Mapper:      mapper,
 		ImgStorage:  NewFSImageDB(mapper),
 		GCHStorage:  nil,
+		LCHStorage:  nil,
 		Verbose:     true,
 		In:          os.Stdin,
 		Out:         os.Stdout,
@@ -1026,6 +1096,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		Mapper:      mapper,
 		ImgStorage:  NewFSImageDB(mapper),
 		GCHStorage:  nil,
+		LCHStorage:  nil,
 		Verbose:     true,
 		In:          h.Source,
 		Out:         os.Stdout,
