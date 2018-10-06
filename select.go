@@ -294,7 +294,12 @@ func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image
 		}
 	}
 	onTile := func(i, j int, tileImage image.Image) {
+		bounds := tileImage.Bounds()
 		m.TileData[i][j] = GenHistogram(tileImage, m.K)
+		if !bounds.Empty() {
+			m.TileData[i][j] = m.TileData[i][j].Normalize(bounds.Dx() * bounds.Dy())
+		}
+		// fmt.Println(m.TileData[i][j].EntrySum())
 	}
 	return InitTilesHelper(storage, query, dist, m.NumRoutines, init, onTile)
 }
@@ -341,3 +346,19 @@ func NewLCHImageMetric(storage LCHStorage, numRoutines int) *LCHImageMetric {
 func (m LCHImageMetric) InitStorage(storage ImageStorage) error {
 	return nil
 }
+
+// InitTiles concurrently computes the histograms of the tiles of the query
+// image.
+// func (m *LCHImageMetric) InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error {
+// 	init := func(tiles [][]image.Image) {
+// 		m.TileData = make([][]*LCH, len(tiles))
+// 		for i, col := range tiles {
+// 			size := len(col)
+// 			m.TileData[i] = make([]*LCH, size)
+// 		}
+// 	}
+// 	onTile := func(i, j int, tileImage image.Image) {
+// 		m.TileData[i][j] = GenLCH(scheme, img, k, true)
+// 	}
+// 	return InitTilesHelper(storage, query, dist, m.NumRoutines, init, onTile)
+// }
