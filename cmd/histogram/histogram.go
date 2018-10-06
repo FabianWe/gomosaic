@@ -57,7 +57,7 @@ func main() {
 		fmt.Println(decodeErr)
 		os.Exit(1)
 	}
-	histogram := gomosaic.GenHistogram(img, 4)
+	histogram := gomosaic.GenHistogram(img, 4, false)
 	execTime := time.Since(start)
 	fmt.Println("Histogram:")
 	histogram.PrintInfo(true)
@@ -75,62 +75,4 @@ func main() {
 		fmt.Printf("Sum of all entries is %.2f\n", normalized.EntrySum())
 	}
 	fmt.Println("Done after", execTime)
-
-	scheme := gomosaic.NewFiveLCHScheme()
-	lch, lchErr := scheme.ComputLCH(img, 8)
-	if lchErr != nil {
-		log.Fatal(lchErr)
-	}
-	fmt.Printf("LCH consisting of %d parts\n", len(lch.Histograms))
-	fmt.Println("Sums:")
-	for i, gch := range lch.Histograms {
-		fmt.Printf("Sum of %d: %.2f\n", i, gch.EntrySum())
-	}
-
-	fmt.Println("iteative")
-	start = time.Now()
-	for i := 0; i < 4; i++ {
-		v, _ := lch.Dist(lch, gomosaic.HistogramVectorMetric(gomosaic.CosineSimilarity))
-		fmt.Printf("%.2f\n", v)
-	}
-	execTime = time.Since(start)
-	fmt.Println("Done after", execTime)
-
-	ch := make(chan float64, 4)
-	fmt.Println("concurrent")
-	start = time.Now()
-	for i := 0; i < 4; i++ {
-		go func() {
-			v, _ := lch.Dist(lch, gomosaic.HistogramVectorMetric(gomosaic.CosineSimilarity))
-			ch <- v
-		}()
-	}
-	for i := 0; i < 4; i++ {
-		fmt.Printf("%.2f\n", <-ch)
-	}
-	execTime = time.Since(start)
-	fmt.Println("Done after", execTime)
-
-	// div := gomosaic.NewFixedNumDivider(20, 30, false)
-	// distribution := div.Divide(img.Bounds())
-	//
-	// tiles, tilesErr := gomosaic.DivideImage(img, distribution, 8)
-	// if tilesErr != nil {
-	// 	log.Fatal(tilesErr)
-	// }
-	//
-	// outDir := "out"
-	// for i, row := range tiles {
-	// 	for j, tile := range row {
-	// 		f, openErr := os.Create(filepath.Join(outDir, fmt.Sprintf("tile-%d-%d.jpg", i, j)))
-	// 		if openErr != nil {
-	// 			log.Fatal(openErr)
-	// 		}
-	// 		decodeErr = jpeg.Encode(f, tile, &jpeg.Options{Quality: 100})
-	// 		f.Close()
-	// 		if decodeErr != nil {
-	// 			log.Fatal(decodeErr)
-	// 		}
-	// 	}
-	// }
 }

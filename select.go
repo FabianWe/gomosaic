@@ -294,12 +294,7 @@ func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image
 		}
 	}
 	onTile := func(i, j int, tileImage image.Image) {
-		bounds := tileImage.Bounds()
-		m.TileData[i][j] = GenHistogram(tileImage, m.K)
-		if !bounds.Empty() {
-			m.TileData[i][j] = m.TileData[i][j].Normalize(bounds.Dx() * bounds.Dy())
-		}
-		// fmt.Println(m.TileData[i][j].EntrySum())
+		m.TileData[i][j] = GenHistogram(tileImage, m.K, true)
 	}
 	return InitTilesHelper(storage, query, dist, m.NumRoutines, init, onTile)
 }

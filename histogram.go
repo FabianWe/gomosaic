@@ -129,9 +129,13 @@ func (h *Histogram) Add(img image.Image, k uint) {
 // in each direction (k), k must be a number between 1 and 256.
 // The histogram contains the freuqency of each color after quantiation in
 // k sub-divisions.
-func GenHistogram(img image.Image, k uint) *Histogram {
+func GenHistogram(img image.Image, k uint, normalize bool) *Histogram {
 	res := NewHistogram(k)
 	res.Add(img, k)
+	bounds := img.Bounds()
+	if normalize && !bounds.Empty() {
+		return res.Normalize(bounds.Dx() * bounds.Dy())
+	}
 	return res
 }
 
@@ -227,14 +231,7 @@ func CreateHistograms(ids []ImageID, storage ImageStorage, normalize bool, k uin
 					errorChan <- imageErr
 					continue
 				}
-				hist := GenHistogram(image, k)
-				if normalize {
-					bounds := image.Bounds()
-					if !bounds.Empty() {
-						size := bounds.Dx() * bounds.Dy()
-						hist = hist.Normalize(size)
-					}
-				}
+				hist := GenHistogram(image, k, normalize)
 				res[next.pos] = hist
 				errorChan <- nil
 			}
@@ -280,14 +277,7 @@ func CreateHistogramsSequential(storage ImageStorage, normalize bool, k uint, pr
 		if imageErr != nil {
 			return nil, imageErr
 		}
-		hist := GenHistogram(image, k)
-		if normalize {
-			bounds := image.Bounds()
-			if !bounds.Empty() {
-				size := bounds.Dx() * bounds.Dy()
-				hist = hist.Normalize(size)
-			}
-		}
+		hist := GenHistogram(image, k, normalize)
 		res[i] = hist
 		if progress != nil {
 			progress(int(i))
