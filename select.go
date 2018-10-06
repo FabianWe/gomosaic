@@ -54,11 +54,74 @@ type ImageSelector interface {
 //
 // It is used in ImageMetricMinimizer which contains more information.
 //
+// You might want to use InitTilesHelper to easily crate a concurrent
+// InitTiles function.
+//
 // An example implementation is given in HistogramImageMetric.
 type ImageMetric interface {
 	InitStorage(storage ImageStorage) error
 	InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error
 	Compare(storage ImageStorage, image ImageID, tileY, tileX int) (float64, error)
+}
+
+// InitTilesHelper is a helper function to easily create a concurrent InitTiles
+// function for ImageMetrics.
+//
+// It will do the following: First it creates the actual tiles of the image
+// and then it will call the init function. In this function you don't have
+// to create metric values or something, just initialize the datastructure
+// that holds information.
+// It then gets concurrently filled by calls of onTile which is concurrently
+// called for each tile of the image.
+func InitTilesHelper(storage ImageStorage, query image.Image, dist TileDivision,
+	numRoutines int,
+	init func(tiles [][]image.Image),
+	onTile func(i, j int, tileImage image.Image)) error {
+	tiles, tilesErr := DivideImage(query, dist, numRoutines)
+	if tilesErr != nil {
+		return tilesErr
+	}
+
+	// initialize tile data
+	init(tiles)
+
+	type job struct {
+		i, j int
+	}
+
+	// compute histograms for each tile
+	jobs := make(chan job, BufferSize)
+	done := make(chan bool, BufferSize)
+
+	for w := 0; w < numRoutines; w++ {
+		go func() {
+			for next := range jobs {
+				tileImage := tiles[next.i][next.j]
+				onTile(next.i, next.j, tileImage)
+				// report done
+				done <- true
+			}
+		}()
+	}
+
+	// start jobs
+	go func() {
+		for i, col := range dist {
+			for j := range col {
+				jobs <- job{i, j}
+			}
+		}
+		close(jobs)
+	}()
+
+	// wait until done
+	for _, col := range dist {
+		for j := 0; j < len(col); j++ {
+			<-done
+		}
+	}
+
+	return nil
 }
 
 // ImageMetricMinimizer implements ImageSelector and selects the image with
@@ -223,57 +286,17 @@ func (m *HistogramImageMetric) InitStorage(storage ImageStorage) error {
 // InitTiles concurrently computes the histograms of the tiles of the query
 // image.
 func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error {
-	tiles, tilesErr := DivideImage(query, dist, m.NumRoutines)
-	if tilesErr != nil {
-		return tilesErr
-	}
-
-	// initialize tile data, compute number of tiles
-	numTiles := 0
-	m.TileData = make([][]*Histogram, len(tiles))
-	for i, col := range tiles {
-		size := len(col)
-		m.TileData[i] = make([]*Histogram, size)
-		numTiles += size
-	}
-
-	type job struct {
-		i, j int
-	}
-
-	// compute histograms for each tile
-	jobs := make(chan job, BufferSize)
-	done := make(chan bool, BufferSize)
-
-	for w := 0; w < m.NumRoutines; w++ {
-		go func() {
-			for next := range jobs {
-				tileImage := tiles[next.i][next.j]
-				m.TileData[next.i][next.j] = GenHistogram(tileImage, m.K)
-				// report done
-				done <- true
-			}
-		}()
-	}
-
-	// start jobs
-	go func() {
-		for i, col := range dist {
-			for j := range col {
-				jobs <- job{i, j}
-			}
-		}
-		close(jobs)
-	}()
-
-	// wait until done
-	for _, col := range dist {
-		for j := 0; j < len(col); j++ {
-			<-done
+	init := func(tiles [][]image.Image) {
+		m.TileData = make([][]*Histogram, len(tiles))
+		for i, col := range tiles {
+			size := len(col)
+			m.TileData[i] = make([]*Histogram, size)
 		}
 	}
-
-	return nil
+	onTile := func(i, j int, tileImage image.Image) {
+		m.TileData[i][j] = GenHistogram(tileImage, m.K)
+	}
+	return InitTilesHelper(storage, query, dist, m.NumRoutines, init, onTile)
 }
 
 // Compare compares a database image and a query image based on the histogram
@@ -295,4 +318,26 @@ func (m *HistogramImageMetric) Compare(storage ImageStorage, image ImageID, tile
 func GCHSelector(histStorage HistogramStorage, delta HistogramMetric, numRoutines int) *ImageMetricMinimizer {
 	imageMetric := NewHistogramImageMetric(histStorage, delta, numRoutines)
 	return NewImageMetricMinimizer(imageMetric, numRoutines)
+}
+
+type LCHImageMetric struct {
+	LCHStorage LCHStorage
+	TileData   [][]*LCH
+	// we don't really have to save it, but it won't hurt
+	K           uint
+	NumRoutines int
+}
+
+func NewLCHImageMetric(storage LCHStorage, numRoutines int) *LCHImageMetric {
+	return &LCHImageMetric{
+		LCHStorage:  storage,
+		TileData:    nil,
+		K:           storage.Divisions(),
+		NumRoutines: numRoutines,
+	}
+}
+
+// InitStorage does nothing.
+func (m LCHImageMetric) InitStorage(storage ImageStorage) error {
+	return nil
 }
