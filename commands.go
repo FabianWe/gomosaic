@@ -820,7 +820,23 @@ func parseGCHMetric(s string) (HistogramMetric, error) {
 	case strings.HasPrefix(s, "gch-"):
 		metricName = s[4:]
 	default:
-		return nil, fmt.Errorf("Invalid gch format, expect \"gch\" or \"gch-<METRIC>\", got %s", s)
+		return nil, fmt.Errorf("Invalid gch format, expect \"gch\" or \"gch-<metric>\", got %s", s)
+	}
+	if metric, ok := GetHistogramMetric(metricName); ok {
+		return metric, nil
+	}
+	return nil, fmt.Errorf("Unkown metric %s", metricName)
+}
+
+func parseLCHMetric(s string) (HistogramMetric, error) {
+	var metricName string
+	switch {
+	case s == "lch":
+		metricName = "euclid"
+	case strings.HasPrefix(s, "lch-"):
+		metricName = s[4:]
+	default:
+		return nil, fmt.Errorf("Invalid gch format, expect \"lch\" or \"lch-<metric>\", got %s", s)
 	}
 	if metric, ok := GetHistogramMetric(metricName); ok {
 		return metric, nil
@@ -867,15 +883,28 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		if outPathErr != nil {
 			return outPathErr
 		}
-		if state.GCHStorage == nil {
-			return errors.New("No GCH data loaded, use \"gch create\" or \"gch load\"")
-		}
+
 		selectionStr := args[2]
-		// only gch supported atm
-		metric, metricErr := parseGCHMetric(selectionStr)
-		if metricErr != nil {
-			return metricErr
+		// supported gch and lch
+		useGCH := true
+
+		// try to parse gch and lch
+		// not so nice, we compute prefix stuff later again... but well
+		switch {
+		case strings.HasPrefix(selectionStr, "gch"):
+			useGCH = true
+			if state.GCHStorage == nil {
+				return errors.New("No GCH data loaded, use \"gch create\" or \"gch load\"")
+			}
+		case strings.HasPrefix(selectionStr, "lch"):
+			useGCH = false
+			if state.LCHStorage == nil {
+				return errors.New("No LCH data loaded, use \"lch create\" or \"lch load\"")
+			}
+		default:
+			return fmt.Errorf("Invalid image selector, expected gch or lch, got %s", selectionStr)
 		}
+
 		tilesX, tilesY, tilesParseErr := ParseDimensions(args[3])
 		if tilesParseErr != nil {
 			return ErrCmdSyntaxErr
@@ -940,7 +969,33 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			fmt.Fprintln(state.Out, "Dividing image into tiles")
 		}
 		dist := divider.Divide(img.Bounds())
-		selector := GCHSelector(state.GCHStorage, metric, state.NumRoutines)
+		var selector ImageSelector
+		if useGCH {
+			metric, metricErr := parseGCHMetric(selectionStr)
+			if metricErr != nil {
+				return metricErr
+			}
+			selector = GCHSelector(state.GCHStorage, metric, state.NumRoutines)
+		} else {
+			metric, metricErr := parseLCHMetric(selectionStr)
+			if metricErr != nil {
+				return metricErr
+			}
+			// TODO this fixes the scheme on the number, that is no other four or
+			// five part scheme can be used, but I guess that's just fine
+			// otherwise we must safe it somewhere
+			var scheme LCHScheme
+			switch state.LCHStorage.SchemeSize() {
+			case 4:
+				scheme = NewFourLCHScheme()
+			case 5:
+				scheme = NewFiveLCHScheme()
+			default:
+				// should never happen
+				return fmt.Errorf("Invalid scheme with %d parts. This is a bug! Pleas report", state.LCHStorage.SchemeSize())
+			}
+			selector = LCHSelector(state.LCHStorage, scheme, metric, state.NumRoutines)
+		}
 		if state.Verbose {
 			fmt.Fprintln(state.Out, "Selecting images")
 		}
