@@ -20,6 +20,7 @@ import (
 	_ "image/png"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -367,5 +368,7 @@ func compare(args []string) {
 		fmt.Fprintln(os.Stderr, "Invalid syntax for --compare, requires 4 or 5 arguments, got", len(args))
 		os.Exit(1)
 	}
-	fromTemplate(gomosaic.CompareMetrics, args...)
+	// this is a rather ugly fix for windows
+	cmd := filepath.FromSlash(gomosaic.CompareMetrics)
+	fromTemplate(cmd, args...)
 }
