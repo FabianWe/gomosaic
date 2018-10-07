@@ -60,30 +60,16 @@ func (mode DivideMode) String() string {
 // TileDivision represents the divison of an image into rectangles. See
 // ImageDivider for details about divisions.
 //
-// Tiles are not stored in the fashion (x, y) but (y, x). That means each entry
-// in the division describes one column of the image.
-// The get method does this correctly.
+// Divisons are stored column wise, that is each entry in division is a column.
+// division[0] is the first column etc.
 type TileDivision [][]image.Rectangle
-
-// Get returns the rectangle at position div[y][x], that is the rectangle
-// in row y and column x.
-func (div TileDivision) Get(x, y int) image.Rectangle {
-	return div[y][x]
-}
 
 // Tiles are the tiles of an image. They're genrated from a TileDivision
 // and the image matrix is of the same size as the TileDivision.
 //
-// Tiles are not stored in the fashion (x, y) but (y, x). That means each entry
-// in the division describes one column of the image.
-// The get method does this correctly.
+// Tiles are stored column wise, that is each entry in tiles is a column.
+// tiles[0] is the first column etc.
 type Tiles [][]image.Image
-
-// Get returns the image at position tiles[y][x], that is the image in row y and
-// column x.
-func (tiles Tiles) Get(x, y int) image.Image {
-	return tiles[y][x]
-}
 
 // ImageDivider is a type to divide an image into tiles. That is it creates
 // the areas which should be replaced by images from the database.
@@ -164,12 +150,13 @@ func (divider FixedSizeDivider) Divide(bounds image.Rectangle) TileDivision {
 	imgWidth := bounds.Dx()
 	imgHeight := bounds.Dy()
 
-	numRows := divider.getSize(imgHeight, divider.Height)
-	numCols := divider.getSize(imgWidth, divider.Width)
-	res := make(TileDivision, numRows)
-	for i := 0; i < numRows; i++ {
-		res[i] = make([]image.Rectangle, numCols)
-		for j := 0; j < numCols; j++ {
+	numCols := divider.getSize(imgHeight, divider.Height)
+	numRows := divider.getSize(imgWidth, divider.Width)
+	res := make(TileDivision, numCols)
+	for i := 0; i < numCols; i++ {
+		res[i] = make([]image.Rectangle, numRows)
+		for j := 0; j < numRows; j++ {
+			// TODO wrong?
 			x0 := bounds.Min.X + j*divider.Width
 			y0 := bounds.Min.Y + i*divider.Height
 			x1 := divider.outerBound(bounds.Max.X, x0+divider.Width)
