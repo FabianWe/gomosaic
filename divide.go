@@ -235,17 +235,17 @@ func (divider *FixedNumDivider) Divide(bounds image.Rectangle) TileDivision {
 	if tileHeight <= 0 {
 		tileHeight = 1
 	}
-	numRows := divider.NumY
-	numCols := divider.NumX
-	res := make(TileDivision, divider.NumY)
-	for i := 0; i < numRows; i++ {
-		res[i] = make([]image.Rectangle, numCols)
-		for j := 0; j < numCols; j++ {
+	numCols := divider.NumY
+	numRows := divider.NumX
+	res := make(TileDivision, numCols)
+	for i := 0; i < numCols; i++ {
+		res[i] = make([]image.Rectangle, numRows)
+		for j := 0; j < numRows; j++ {
 			x0 := bounds.Min.X + j*tileWidth
 			y0 := bounds.Min.Y + i*tileHeight
 			// TODO think this through again...
-			x1 := divider.outerBound(numCols, j, bounds.Max.X, x0+tileWidth)
-			y1 := divider.outerBound(numRows, i, bounds.Max.Y, y0+tileHeight)
+			x1 := divider.outerBound(numRows, j, bounds.Max.X, x0+tileWidth)
+			y1 := divider.outerBound(numCols, i, bounds.Max.Y, y0+tileHeight)
 			res[i][j] = image.Rect(x0, y0, x1, y1)
 		}
 	}
