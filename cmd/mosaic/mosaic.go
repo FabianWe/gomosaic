@@ -34,9 +34,9 @@ func usage() {
 	prefixLength := utf8.RuneCountInString(prefix)
 	prefixReplace := strings.Repeat(" ", prefixLength)
 	fmt.Println(prefix, "[--version | -v] [--help | -h] [--repl] [--run <path> [params...]] [--execute <command> [params...]] ")
-	fmt.Println(prefixReplace, "[--simple <db-path> <input> <output> <tilesX x tilesY> [width x height]]")
-	fmt.Println(prefixReplace, "[--metric <db-path> <input> <output> <tilesX x tilesY> <metric>]")
-	fmt.Println(prefixReplace, "[--compare <db-path> <input> <output-dir> <tilesX x tilesY>]")
+	fmt.Println(prefixReplace, "[simple <db-path> <input> <output> <tilesX x tilesY> [width x height]]")
+	fmt.Println(prefixReplace, "[metric <db-path> <input> <output> <tilesX x tilesY> <metric>]")
+	fmt.Println(prefixReplace, "[compare <db-path> <input> <output-dir> <tilesX x tilesY>]")
 	fmt.Println()
 	fmt.Println("The commands mean the following:")
 	fmt.Println()
@@ -59,7 +59,7 @@ func usage() {
 				"replacements.",
 			}},
 		cmdDesc{
-			"--simple", []string{
+			"simple", []string{
 				"Create a mosaic from images in the directory db-path. The image is",
 				"created from image input and the mosaic written to output. tilesX",
 				"and tilesY specify the number of tiles in the mosaic image. The",
@@ -67,20 +67,20 @@ func usage() {
 				"the mosaic has the same width and height as the input. You can also",
 				"specify only width or height and keep the ratio of the input image.",
 				"For example 1024x or x768.",
-				"Example: --simple ~/Pictures/ input.jpg output.png 20x30 1024x",
+				"Example: simple ~/Pictures/ input.jpg output.png 20x30 1024x",
 			}},
 		cmdDesc{
-			"--metric", []string{
+			"metric", []string{
 				"The same as --simple but with an additional metric argument. All",
 				"arguments are required, to keep the input images dimensions simply",
 				"use \"x\" for the dimension. Valid metrics listed below.",
-				"Example: --metric ~/Pictures/ input.jpg output.png 20x30 x cosine",
+				"Example: metric ~/Pictures/ input.jpg output.png 20x30 x cosine",
 			}},
 		cmdDesc{
-			"--compare", []string{
+			"compare", []string{
 				"The same as --simple but output is specified by a directory in which",
 				"several images are saved, computed with different metrics.",
-				"Example: --compare ~/Pictures/ input.jpg ./output/ 20x30 x768",
+				"Example: compare ~/Pictures/ input.jpg ./output/ 20x30 x768",
 			}},
 	}
 
@@ -131,11 +131,11 @@ func main() {
 		}
 		defer f.Close()
 		script(f, os.Args[3:]...)
-	case "--simple":
+	case "simple":
 		simple(os.Args[2:])
-	case "--metric":
+	case "metric":
 		metric(os.Args[2:])
-	case "--compare":
+	case "compare":
 		compare(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid command \"%s\"\n", os.Args[1])

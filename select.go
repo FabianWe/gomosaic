@@ -183,7 +183,8 @@ func (min *ImageMetricMinimizer) Init(storage ImageStorage) error {
 
 // SelectImages selects the image that minimizes the metric for each tile.
 // It computes the most fitting image for NumRoutines tiles concurrently.
-func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage, query image.Image, dist TileDivision) ([][]ImageID, error) {
+func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage,
+	query image.Image, dist TileDivision) ([][]ImageID, error) {
 	if initErr := min.Metric.InitTiles(storage, query, dist); initErr != nil {
 		return nil, initErr
 	}

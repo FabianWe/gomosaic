@@ -86,8 +86,8 @@ type ExecutorState struct {
 	// Option / config part
 
 	// CutMosaic describes whether the mosaic should be "cut".
-	// Cutting means to cut the resulting image s.t. it fits  the results bounds.
-	// Example: Consider you want to create an image with width 99 width and you
+	// Cutting means to cut the resulting image s.t. each tile has the same bounds.
+	// Example: Suppose you want to divide an image with width 99 and want ten
 	// want to tiles horizontally. This leads to an image where each tile has
 	// a width of 9. Ten tiles yields to a final width of 90. As you see 9 pixels
 	// are "left over". The distribution in ten tiles is fixed, so we can't add
@@ -95,7 +95,7 @@ type ExecutorState struct {
 	// we can enlarge the last tile by 9 pixels. So we would have 9 tiles with
 	// width 9 and one tile with width 18.
 	//
-	// CutMosaic controls what to do with those remaining pixels: If cut is set
+	// Cut controls what to do with those remaining pixels: If cut is set
 	// to true we skip the 9 pixels and return an image of size 90. If set to
 	// false we enlarge the last tile and return an image witz size 99.
 	// Usually the default is false.
@@ -613,7 +613,9 @@ func GCHCommand(state *ExecutorState, args ...string) error {
 		fmt.Fprintf(state.Out, "Creating histograms for all images in storage with k = %d sub-divisions\n", k)
 		var progress ProgressFunc
 		if state.Verbose {
-			progress = StdProgressFunc(state.Out, "", int(state.ImgStorage.NumImages()), 100)
+			inStore := int(state.ImgStorage.NumImages())
+			progress = StdProgressFunc(state.Out, "",
+				inStore, IntMin(100, inStore/10))
 		}
 		start := time.Now()
 		histograms, histErr := CreateAllHistograms(state.ImgStorage,
@@ -730,7 +732,9 @@ func LCHCommand(state *ExecutorState, args ...string) error {
 		fmt.Fprintf(state.Out, "Creating LCHs for all images in storage with k = %d sub-divisions and %d parts\n", k, asInt)
 		var progress ProgressFunc
 		if state.Verbose {
-			progress = StdProgressFunc(state.Out, "", int(state.ImgStorage.NumImages()), 100)
+			inStore := int(state.ImgStorage.NumImages())
+			progress = StdProgressFunc(state.Out, "",
+				inStore, IntMin(100, inStore/10))
 		}
 		start := time.Now()
 		lchs, lchsErr := CreateAllLCHs(scheme, state.ImgStorage,

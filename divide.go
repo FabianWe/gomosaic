@@ -59,11 +59,31 @@ func (mode DivideMode) String() string {
 
 // TileDivision represents the divison of an image into rectangles. See
 // ImageDivider for details about divisions.
+//
+// Tiles are not stored in the fashion (x, y) but (y, x). That means each entry
+// in the division describes one column of the image.
+// The get method does this correctly.
 type TileDivision [][]image.Rectangle
+
+// Get returns the rectangle at position div[y][x], that is the rectangle
+// in row y and column x.
+func (div TileDivision) Get(x, y int) image.Rectangle {
+	return div[y][x]
+}
 
 // Tiles are the tiles of an image. They're genrated from a TileDivision
 // and the image matrix is of the same size as the TileDivision.
+//
+// Tiles are not stored in the fashion (x, y) but (y, x). That means each entry
+// in the division describes one column of the image.
+// The get method does this correctly.
 type Tiles [][]image.Image
+
+// Get returns the image at position tiles[y][x], that is the image in row y and
+// column x.
+func (tiles Tiles) Get(x, y int) image.Image {
+	return tiles[y][x]
+}
 
 // ImageDivider is a type to divide an image into tiles. That is it creates
 // the areas which should be replaced by images from the database.
@@ -80,15 +100,22 @@ type Tiles [][]image.Image
 // must not even overlap with the image at some point, but usually it should.
 //
 // (4) The result may be empty (or nil); rows may be empty.
+//
+// (5) Images are stored in coordinates [y][x], that means each entry in the
+// tile division describes a column.
 type ImageDivider interface {
 	Divide(image.Rectangle) TileDivision
 }
 
+// FixedSizeDivider divides an image into tiles where each tile has the
+// given width and height. It implements ImageDivider.
+// The DivideMode describes how to deal with "remaining" pixel.
 type FixedSizeDivider struct {
 	Width, Height int
 	Mode          DivideMode
 }
 
+// NewFixedSizeDivider returns a new FixedSizeDivider.
 func NewFixedSizeDivider(width, height int, mode DivideMode) FixedSizeDivider {
 	return FixedSizeDivider{Width: width, Height: height, Mode: mode}
 }
@@ -128,6 +155,7 @@ func (divider FixedSizeDivider) outerBound(imgBoundPosition, position int) int {
 
 // TODO test this (test cases,not just real world)
 
+// Divide implements the Divide method of ImageDivider.
 func (divider FixedSizeDivider) Divide(bounds image.Rectangle) TileDivision {
 	// no division possible if bounds are empty
 	if bounds.Empty() {
@@ -152,11 +180,28 @@ func (divider FixedSizeDivider) Divide(bounds image.Rectangle) TileDivision {
 	return res
 }
 
+// FixedNumDivider is an ImageDivider that divides an image into a given number
+// of tiles.
+// Cut describes whether the image should be "cut".
+// Cutting means to cut the resulting image s.t. each tile has the same bounds.
+// Example: Suppose you want to divide an image with width 99 and want ten
+// want to tiles horizontally. This leads to an image where each tile has
+// a width of 9. Ten tiles yields to a final width of 90. As you see 9 pixels
+// are "left over". The distribution in ten tiles is fixed, so we can't add
+// another tile. But in order to enforce the original propsed width
+// we can enlarge the last tile by 9 pixels. So we would have 9 tiles with
+// width 9 and one tile with width 18.
+//
+// Cut controls what to do with those remaining pixels: If cut is set
+// to true we skip the 9 pixels and return an image of size 90. If set to
+// false we enlarge the last tile and return an image witz size 99.
 type FixedNumDivider struct {
 	NumX, NumY int
 	Cut        bool
 }
 
+// NewFixedNumDivider returns a new FixedNumDivider given the number of tiles in
+// x and y direction.
 func NewFixedNumDivider(numX, numY int, cut bool) *FixedNumDivider {
 	return &FixedNumDivider{NumX: numX, NumY: numY, Cut: cut}
 }
@@ -175,6 +220,7 @@ func (divider *FixedNumDivider) outerBound(divisionNum, index, imgBound, value i
 	return value
 }
 
+// Divide implements the Divide method of ImageDivider.
 func (divider *FixedNumDivider) Divide(bounds image.Rectangle) TileDivision {
 	// similar to FixedSizeArranger, but forces the dimensions
 	// no division possible if empty

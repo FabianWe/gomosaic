@@ -53,3 +53,17 @@ func MinUint8(a uint8, elements ...uint8) uint8 {
 	}
 	return res
 }
+
+func IntMin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func IntMax(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
