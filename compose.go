@@ -139,12 +139,15 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 	// read image
 	tileWidth := area.Dx()
 	tileHeight := area.Dy()
+	if area.Empty() {
+		return nil
+	}
 	var img image.Image
 	// first try to lookup the image in the cache
 	img = cache.Get(dbImage, tileWidth, tileHeight)
 	if img == nil {
 		var imgErr error
-		// use storate to read image and then resize it
+		// use storage to read image and then resize it
 		img, imgErr = storage.LoadImage(dbImage)
 		if imgErr != nil {
 			return imgErr
@@ -168,7 +171,7 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 
 // ComposeMosaic concurrently composes a mosaic image given the distribution
 // in tiles and the selected images for each tile.
-// Images might be loaded by the storage. The resizer and the resize strategy
+// Images are loaded by the storage. The resizer and the resize strategy
 // are used to resize database images to fit in tiles. The mosaic division must
 // start from (0, 0) and the rectangles are not allowed to overlap, in short
 // it has be what we intuively would call a distribution into tiles.

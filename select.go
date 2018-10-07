@@ -91,7 +91,7 @@ func InitTilesHelper(storage ImageStorage, query image.Image, dist TileDivision,
 		i, j int
 	}
 
-	// compute histograms for each tile
+	// compute data for each tile
 	jobs := make(chan job, BufferSize)
 	errors := make(chan error, BufferSize)
 
@@ -206,16 +206,14 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage,
 		}
 	}
 
-	// compute best matching images, as explained in the documentation we iterate
-	// over image ids first to improve memory usage
-	// we use k workers concurrently
+	// compute best matching images
 
 	numImages := storage.NumImages()
 	var wg sync.WaitGroup
 	wg.Add(numTiles)
 	// job type
 	type job struct {
-		tileY, tileX int
+		i, j int
 	}
 	jobs := make(chan job, BufferSize)
 
@@ -226,20 +224,20 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage,
 				var imageID ImageID
 				for ; imageID < numImages; imageID++ {
 					// try to compute distance and update entry
-					dist, distErr := min.Metric.Compare(storage, imageID, next.tileY, next.tileX)
+					dist, distErr := min.Metric.Compare(storage, imageID, next.i, next.j)
 					if distErr != nil {
 						log.WithFields(log.Fields{
 							log.ErrorKey: distErr,
 							"image":      imageID,
-							"tileY":      next.tileY,
-							"tileX":      next.tileX,
+							"tileY":      next.i,
+							"tileX":      next.j,
 						}).Error("Can't compute metric value, ignoreing it")
 						continue
 					}
 					// check if better than best so far
-					if dist < bestValues[next.tileY][next.tileX] {
-						bestValues[next.tileY][next.tileX] = dist
-						result[next.tileY][next.tileX] = imageID
+					if dist < bestValues[next.i][next.j] {
+						bestValues[next.i][next.j] = dist
+						result[next.i][next.j] = imageID
 					}
 				}
 				wg.Done()

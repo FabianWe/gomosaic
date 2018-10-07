@@ -278,7 +278,7 @@ func DivideImage(img image.Image, distribution TileDivision, numRoutines int) (T
 		go func() {
 			for next := range jobs {
 				r := distribution[next.i][next.j]
-				// first intersect tom ake sure that we truly have a rectangle in the image
+				// first intersect to make sure that we truly have a rectangle in the image
 				r = r.Intersect(bounds)
 				// now we try to get the subimage
 				// because the intersection can be empty the computed image can be
