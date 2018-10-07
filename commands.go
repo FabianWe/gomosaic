@@ -879,6 +879,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 	}
 	switch {
 	case len(args) > 3:
+		totalStart := time.Now()
 		if !JPGAndPNG(filepath.Ext(args[1])) {
 			return fmt.Errorf("Supported files are .jpg and .png, got file %s", args[1])
 		}
@@ -969,9 +970,6 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			return fmt.Errorf("Mosaic image would be empty, dimensions %dx%d", mosaicWidth, mosaicHeight)
 		}
 		divider := NewFixedNumDivider(tilesX, tilesY, true)
-		if state.Verbose {
-			fmt.Fprintln(state.Out, "Dividing image into tiles")
-		}
 		dist := divider.Divide(img.Bounds())
 		var selector ImageSelector
 		if useGCH {
@@ -1001,15 +999,23 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			selector = LCHSelector(state.LCHStorage, scheme, metric, state.NumRoutines)
 		}
 		if state.Verbose {
-			fmt.Fprintln(state.Out, "Selecting images")
+			fmt.Fprintln(state.Out)
+			fmt.Fprintln(state.Out, "Selecting database images for tiles")
 		}
-		selection, selectionErr := selector.SelectImages(state.ImgStorage, img, dist)
+		var progress ProgressFunc
+		if state.Verbose {
+			numTiles := dist.Size()
+			progress = StdProgressFunc(state.Out, "",
+				numTiles, IntMin(100, numTiles/10))
+		}
+		selection, selectionErr := selector.SelectImages(state.ImgStorage, img, dist, progress)
 		if selectionErr != nil {
 			return selectionErr
 		}
 		execTime := time.Since(start)
 		if state.Verbose {
-			fmt.Fprintln(state.Out, "Preparation took", execTime)
+			fmt.Fprintln(state.Out, "Selection took", execTime)
+			fmt.Fprintln(state.Out)
 			fmt.Fprintln(state.Out, "Composing mosaic")
 		}
 		start = time.Now()
@@ -1017,20 +1023,27 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		mosaicBounds := image.Rect(0, 0, mosaicWidth, mosaicHeight)
 		divider.Cut = state.CutMosaic
 		mosaicDist := divider.Divide(mosaicBounds)
+		// progress func should be fine to use
 		mosaic, mosaicErr := ComposeMosaic(state.ImgStorage, selection, mosaicDist,
-			NewNfntResizer(state.InterP), ForceResize, state.NumRoutines)
+			NewNfntResizer(state.InterP), ForceResize, state.NumRoutines, progress)
 		if mosaicErr != nil {
 			return mosaicErr
 		}
 		execTime = time.Since(start)
 		if state.Verbose {
-			fmt.Fprintln(state.Out, "Image selection took", execTime)
+			fmt.Fprintln(state.Out, "Composing mosaic took took", execTime)
+			fmt.Fprintln(state.Out)
 			fmt.Fprintln(state.Out, "Saving image")
 		}
 		if writeErr := saveImage(outPath, mosaic, state.JPGQuality); writeErr != nil {
 			return writeErr
 		}
 		fmt.Fprintln(state.Out, "Mosaic saved to", outPath)
+		if state.Verbose {
+			totalTime := time.Since(totalStart)
+			fmt.Fprintln(state.Out)
+			fmt.Fprintln(state.Out, "Total creation time:", totalTime)
+		}
 		return nil
 	default:
 		return ErrCmdSyntaxErr

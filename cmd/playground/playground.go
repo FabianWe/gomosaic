@@ -120,7 +120,7 @@ func main() {
 	selector.Init(storage)
 	div := gomosaic.NewFixedNumDivider(20, 30, false)
 	dist := div.Divide(img.Bounds())
-	comp, compseErr := selector.SelectImages(storage, img, dist)
+	comp, compseErr := selector.SelectImages(storage, img, dist, nil)
 	execTime = time.Since(start)
 	if compseErr != nil {
 		log.Fatal(compseErr)

@@ -64,12 +64,30 @@ func (mode DivideMode) String() string {
 // division[0] is the first column etc.
 type TileDivision [][]image.Rectangle
 
+// Size returns the total number of rectangles.
+func (div TileDivision) Size() int {
+	res := 0
+	for _, col := range div {
+		res += len(col)
+	}
+	return res
+}
+
 // Tiles are the tiles of an image. They're genrated from a TileDivision
 // and the image matrix is of the same size as the TileDivision.
 //
 // Tiles are stored column wise, that is each entry in tiles is a column.
 // tiles[0] is the first column etc.
 type Tiles [][]image.Image
+
+// Size returns the total number of tiles.
+func (tiles Tiles) Size() int {
+	res := 0
+	for _, col := range tiles {
+		res += len(col)
+	}
+	return res
+}
 
 // ImageDivider is a type to divide an image into tiles. That is it creates
 // the areas which should be replaced by images from the database.

@@ -179,7 +179,7 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 // Scaled database images are cached to speed up the generation process.
 func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	mosaicDivison TileDivision, resizer ImageResizer, s ResizeStrategy,
-	numRoutines int) (image.Image, error) {
+	numRoutines int, progress ProgressFunc) (image.Image, error) {
 	if numRoutines <= 0 {
 		numRoutines = 1
 	}
@@ -238,9 +238,14 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	}()
 
 	// wait until done
+	numDone := 0
 	for _, tilesCol := range symbolicTiles {
 		for j := 0; j < len(tilesCol); j++ {
 			<-done
+			numDone++
+			if progress != nil {
+				progress(numDone)
+			}
 		}
 	}
 

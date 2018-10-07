@@ -45,7 +45,8 @@ type ImageSelector interface {
 	//
 	// If no image can be selected (for example empty database) the id in the
 	// result should be set to NoImageID.
-	SelectImages(storage ImageStorage, query image.Image, dist TileDivision) ([][]ImageID, error)
+	SelectImages(storage ImageStorage, query image.Image, dist TileDivision,
+		progress ProgressFunc) ([][]ImageID, error)
 }
 
 // ImageMetric is used to compare a database image (image identified by an id)
@@ -184,7 +185,7 @@ func (min *ImageMetricMinimizer) Init(storage ImageStorage) error {
 // SelectImages selects the image that minimizes the metric for each tile.
 // It computes the most fitting image for NumRoutines tiles concurrently.
 func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage,
-	query image.Image, dist TileDivision) ([][]ImageID, error) {
+	query image.Image, dist TileDivision, progress ProgressFunc) ([][]ImageID, error) {
 	if initErr := min.Metric.InitTiles(storage, query, dist); initErr != nil {
 		return nil, initErr
 	}
@@ -246,11 +247,16 @@ func (min *ImageMetricMinimizer) SelectImages(storage ImageStorage,
 	}
 
 	// add jobs
+	numDone := 0
 	go func() {
 		for i, inner := range dist {
 			size := len(inner)
 			for j := 0; j < size; j++ {
 				jobs <- job{i, j}
+				numDone++
+				if progress != nil {
+					progress(numDone)
+				}
 			}
 		}
 		close(jobs)
