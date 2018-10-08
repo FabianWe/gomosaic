@@ -26,14 +26,13 @@ func ComputeAverageColor(img image.Image) AverageColor {
 	// just to be sure we use big integers, depending on the image size we might
 	// get problems
 
-	var r, g, b uint64
-
 	bounds := img.Bounds()
 
 	// don't do anything for empty images
 	if bounds.Empty() {
 		return AverageColor{}
 	}
+	var r, g, b uint64
 	numPixels := uint64(bounds.Dx() * bounds.Dy())
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {

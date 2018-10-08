@@ -190,16 +190,16 @@ func (divider FixedSizeDivider) Divide(bounds image.Rectangle) TileDivision {
 // Cut describes whether the image should be "cut".
 // Cutting means to cut the resulting image s.t. each tile has the same bounds.
 // Example: Suppose you want to divide an image with width 99 and want ten
-// want to tiles horizontally. This leads to an image where each tile has
+// tiles horizontally. This leads to an image where each tile has
 // a width of 9. Ten tiles yields to a final width of 90. As you see 9 pixels
 // are "left over". The distribution in ten tiles is fixed, so we can't add
-// another tile. But in order to enforce the original propsed width
+// another tile. But in order to enforce the original proposed width
 // we can enlarge the last tile by 9 pixels. So we would have 9 tiles with
 // width 9 and one tile with width 18.
 //
 // Cut controls what to do with those remaining pixels: If cut is set
 // to true we skip the 9 pixels and return an image of size 90. If set to
-// false we enlarge the last tile and return an image witz size 99.
+// false we enlarge the last tile and return an image with size 99.
 type FixedNumDivider struct {
 	NumX, NumY int
 	Cut        bool

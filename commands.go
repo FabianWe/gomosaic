@@ -88,16 +88,16 @@ type ExecutorState struct {
 	// CutMosaic describes whether the mosaic should be "cut".
 	// Cutting means to cut the resulting image s.t. each tile has the same bounds.
 	// Example: Suppose you want to divide an image with width 99 and want ten
-	// want to tiles horizontally. This leads to an image where each tile has
+	// tiles horizontally. This leads to an image where each tile has
 	// a width of 9. Ten tiles yields to a final width of 90. As you see 9 pixels
 	// are "left over". The distribution in ten tiles is fixed, so we can't add
-	// another tile. But in order to enforce the original propsed width
+	// another tile. But in order to enforce the original proposed width
 	// we can enlarge the last tile by 9 pixels. So we would have 9 tiles with
 	// width 9 and one tile with width 18.
 	//
 	// Cut controls what to do with those remaining pixels: If cut is set
 	// to true we skip the 9 pixels and return an image of size 90. If set to
-	// false we enlarge the last tile and return an image witz size 99.
+	// false we enlarge the last tile and return an image with size 99.
 	// Usually the default is false.
 	CutMosaic bool
 
@@ -1111,9 +1111,12 @@ func init() {
 			" containing GHCs from a file.",
 	}
 	DefaultCommands["lch"] = Command{
-		Exec:        LCHCommand,
-		Usage:       "lch create <k> <scheme> or lch load <file> or lch save <file>",
-		Description: "TODO",
+		Exec:  LCHCommand,
+		Usage: "lch create <k> <scheme> or lch load <file> or lch save <file>",
+		Description: "Used to administrate local color histograms (LCHs)\n\n" +
+			"\"crate\", \"load\" and \"save\" work as in the gch command. k is also" +
+			"the same as in the GCH command and scheme is the number of GCHs created" +
+			"for each image (must be either 4 or 5).",
 	}
 	DefaultCommands["mosaic"] = Command{
 		Exec:  MosaicCommand,

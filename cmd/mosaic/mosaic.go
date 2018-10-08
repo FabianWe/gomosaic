@@ -201,9 +201,12 @@ func init() {
 			" containing GHCs from a file.",
 	}
 	cmdMap["lch"] = gomosaic.Command{
-		Exec:        gomosaic.LCHCommand,
-		Usage:       "lch create <k> <scheme> or lch load <file> or lch save <file>",
-		Description: "TODO",
+		Exec:  gomosaic.LCHCommand,
+		Usage: "lch create <k> <scheme> or lch load <file> or lch save <file>",
+		Description: "Used to administrate local color histograms (LCHs)\n\n" +
+			"\"crate\", \"load\" and \"save\" work as in the gch command. k is also" +
+			"the same as in the GCH command and scheme is the number of GCHs created" +
+			"for each image (must be either 4 or 5).",
 	}
 	cmdMap["mosaic"] = gomosaic.Command{
 		Exec:  gomosaic.MosaicCommand,
