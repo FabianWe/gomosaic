@@ -12,7 +12,7 @@ For more examples check the [Wiki's example page](https://github.com/FabianWe/go
 ## Installation
 If you are a developer and want to play around / use this library just run `go get -u github.com/FabianWe/gomosaic`.
 If you just want to use the software please check the [release](https://github.com/FabianWe/gomosaic/releases) page for downloads.
-For usage insructions see [here](https://github.com/FabianWe/gomosaic/wiki/Usage).
+For usage insructions see [here](https://github.com/FabianWe/gomosaic/wiki/Usage). Currently it can only run in command line mode, I'm planning to write a GUI though.
 
 ## License
 Copyright 2018 Fabian Wenzelmann
