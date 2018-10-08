@@ -1,5 +1,7 @@
+
 # gomosaic
 gomosaic is an mosaic image generator written entirely in Go. In short: It manages an image database and given a query image returns the image composed or "approximated" of images from the database. The methods implemented are mostly based on "On the use of CBIR in image mosaic generation" by Yue Zhang, 2002, University of Alberta.
+For more information see the [Wiki](https://github.com/FabianWe/gomosaic/wiki).
 
 ## Background
 The project originate from a Golang introduction course where I was looking for a project for the participants. Over time I became more and more interested and started working on this project.
