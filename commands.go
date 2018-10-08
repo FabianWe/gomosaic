@@ -108,6 +108,12 @@ type ExecutorState struct {
 
 	// InterP is the interpolation functions used when resizing the images.
 	InterP resize.InterpolationFunction
+
+	// Cache size is the size of the image cache during mosaic composition.
+	// The more elements in the cache the faster the composition process is, but
+	// it also increases memory consumption. If cache size is < 0 the
+	// DefaultCacheSize is used.
+	CacheSize int
 }
 
 // GetPath returns the absolute path given some other path.
@@ -398,6 +404,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 		"cut":          state.CutMosaic,
 		"jpeg-quality": state.JPGQuality,
 		"interp":       InterPString(state.InterP),
+		"cache":        state.CacheSize,
 	}
 	if len(args) == 1 {
 		// print specific value
@@ -473,6 +480,13 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 		}
 		interP := GetInterP(uint(val))
 		state.InterP = interP
+		return nil
+	case "cache":
+		val, parseErr := strconv.Atoi(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for cache size, must be an integer: %d", val)
+		}
+		state.CacheSize = val
 		return nil
 	default:
 		return fmt.Errorf("Invalid variable \"%s\". For a list use \"stats\"", name)
@@ -840,7 +854,7 @@ func parseLCHMetric(s string) (HistogramMetric, error) {
 	case strings.HasPrefix(s, "lch-"):
 		metricName = s[4:]
 	default:
-		return nil, fmt.Errorf("Invalid gch format, expect \"lch\" or \"lch-<metric>\", got %s", s)
+		return nil, fmt.Errorf("Invalid lch format, expect \"lch\" or \"lch-<metric>\", got %s", s)
 	}
 	if metric, ok := GetHistogramMetric(metricName); ok {
 		return metric, nil
@@ -1025,7 +1039,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		mosaicDist := divider.Divide(mosaicBounds)
 		// progress func should be fine to use
 		mosaic, mosaicErr := ComposeMosaic(state.ImgStorage, selection, mosaicDist,
-			NewNfntResizer(state.InterP), ForceResize, state.NumRoutines, progress)
+			NewNfntResizer(state.InterP), ForceResize, state.NumRoutines, ImageCacheSize, progress)
 		if mosaicErr != nil {
 			return mosaicErr
 		}
@@ -1155,6 +1169,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		CutMosaic:   false,
 		JPGQuality:  100,
 		InterP:      resize.Lanczos3,
+		CacheSize:   ImageCacheSize,
 	}
 }
 
@@ -1238,6 +1253,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		CutMosaic:   false,
 		JPGQuality:  100,
 		InterP:      resize.Lanczos3,
+		CacheSize:   ImageCacheSize,
 	}
 }
 

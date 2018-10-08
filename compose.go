@@ -24,10 +24,10 @@ import (
 )
 
 var (
-	// ImageCacheSize is the size of images caches. Some procedures (especially
-	// the composition of mosaics) might be much more performant if they're
-	// allowed to cache images. This variable controls the size of such caches,
-	// it must be a number ≥ 1.
+	// ImageCacheSize is the default size of images caches. Some procedures
+	// (especially the composition of mosaics) might be much more performant if
+	// they're allowed to cache images. This variable controls the size of such
+	// caches. It must be a value ≥ 1.
 	ImageCacheSize = 15
 )
 
@@ -177,12 +177,19 @@ func insertTile(into *image.RGBA, area image.Rectangle, storage ImageStorage,
 // it has be what we intuively would call a distribution into tiles.
 //
 // Scaled database images are cached to speed up the generation process.
+// The cache size parameter is the size of the cache used. The more elements in
+// the cache the faster the composition process is, but it also increases
+// memory consumption. If cache size is ≤ 0 the DefaultCacheSize is used.
 func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 	mosaicDivison TileDivision, resizer ImageResizer, s ResizeStrategy,
-	numRoutines int, progress ProgressFunc) (image.Image, error) {
+	numRoutines, cacheSize int, progress ProgressFunc) (image.Image, error) {
 	if numRoutines <= 0 {
 		numRoutines = 1
 	}
+	if cacheSize <= 0 {
+		cacheSize = ImageCacheSize
+	}
+
 	numTilesVert := len(symbolicTiles)
 
 	// first create an empty image
@@ -202,7 +209,7 @@ func ComposeMosaic(storage ImageStorage, symbolicTiles [][]ImageID,
 		return nil, errors.New("Can't compose mosaic: Image would be empty")
 	}
 	res = image.NewRGBA(resBounds)
-	cache := NewImageCache(ImageCacheSize)
+	cache := NewImageCache(cacheSize)
 
 	type job struct {
 		i, j int

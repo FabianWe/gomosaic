@@ -321,6 +321,7 @@ func script(r io.Reader, args ...string) {
 			os.Exit(1)
 		}
 	}()
+	fmt.Println(args)
 	//  check if args are given
 	if len(args) > 0 {
 		// parameterize lines
