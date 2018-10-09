@@ -1,4 +1,3 @@
-
 # gomosaic
 gomosaic is an mosaic image generator written entirely in Go. In short: It manages an image database and given a query image returns the image composed or "approximated" of images from the database. The methods implemented are mostly based on "On the use of CBIR in image mosaic generation" by Yue Zhang, 2002, University of Alberta.
 For more information see the [Wiki](https://github.com/FabianWe/gomosaic/wiki).
@@ -15,6 +14,13 @@ For more examples check the [Wiki's example page](https://github.com/FabianWe/go
 If you are a developer and want to play around / use this library just run `go get -u github.com/FabianWe/gomosaic`.
 If you just want to use the software please check the [release](https://github.com/FabianWe/gomosaic/releases) page for downloads.
 For usage insructions see [here](https://github.com/FabianWe/gomosaic/wiki/Usage). Currently it can only run in command line mode, I'm planning to write a GUI though.
+
+## Bugs
+There are probably bugs in this software, though it worked fine for "useful"
+inputs. Please open an issue on github or send an email to fabianwen#posteo.eu
+(replace # with @).
+## Nice ways to extend the software
+Implement color coherence vectors as mentioned in Yue Zhang, 2002. Also the same image gets selected again and again for a query image, especially with big areas of nearly the same color. Implement a mechanism that prevents this.
 
 ## License
 Copyright 2018 Fabian Wenzelmann
