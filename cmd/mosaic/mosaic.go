@@ -99,6 +99,9 @@ func usage() {
 }
 
 func main() {
+	if gomosaic.Debug {
+		fmt.Println("gomosaic is running in debug mode")
+	}
 	if len(os.Args) == 1 {
 		repl()
 	}
