@@ -49,24 +49,26 @@ func NewLCH(histograms []*Histogram) *LCH {
 //
 // If the LCHs are of different dimensions or the GCHs inside the LCHs are
 // of different dimensions an error != nil is returned.
-// TODO test if paralellism makes sense here... or is it just too fast to
-// help? But I would prefer "concurrency first"
 func (lch *LCH) Dist(other *LCH, delta HistogramMetric) (float64, error) {
 	if len(lch.Histograms) != len(other.Histograms) {
 		return -1.0, fmt.Errorf("Invalid LCH dimensions: %d != %d",
 			len(lch.Histograms),
 			len(other.Histograms))
 	}
-	sum := 0.0
-	for i, h1 := range lch.Histograms {
-		h2 := other.Histograms[i]
-		if len(h1.Entries) != len(h2.Entries) {
-			return -1.0, fmt.Errorf("Invalid histogram dimensions (in LCH): %d != %d",
-				len(h1.Entries),
-				len(h2.Entries))
-		}
-		sum += math.Abs(delta(h1, h2))
+
+	res := make(chan float64, len(lch.Histograms))
+
+	for i := range lch.Histograms {
+		go func(index int) {
+			res <- math.Abs(delta(lch.Histograms[index], other.Histograms[index]))
+		}(i)
 	}
+
+	sum := 0.0
+	for _ = range lch.Histograms {
+		sum += <-res
+	}
+
 	return sum, nil
 }
 

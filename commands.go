@@ -1045,7 +1045,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 		}
 		execTime = time.Since(start)
 		if state.Verbose {
-			fmt.Fprintln(state.Out, "Composing mosaic took took", execTime)
+			fmt.Fprintln(state.Out, "Composition of mosaic took took", execTime)
 			fmt.Fprintln(state.Out)
 			fmt.Fprintln(state.Out, "Saving image")
 		}
