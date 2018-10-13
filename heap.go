@@ -18,15 +18,19 @@ import (
 	"container/heap"
 )
 
+// ImageHeapEntry is an entry stored in an image heap. It consists of an image
+// (by id) and the value of that image.
 type ImageHeapEntry struct {
 	Image ImageID
 	Value float64
 }
 
+// NewImageHeapEntry returns a new heap entry.
 func NewImageHeapEntry(image ImageID, value float64) ImageHeapEntry {
 	return ImageHeapEntry{image, value}
 }
 
+// imageHeapInterface is an internal type that implements heap.Interface
 type imageHeapInterface []ImageHeapEntry
 
 func newImageHeapInterface(bound int) *imageHeapInterface {
@@ -62,16 +66,22 @@ func (h *imageHeapInterface) Pop() interface{} {
 	return x
 }
 
+// ImageHeap is a container that stores images sorted according to a float
+// value.
 type ImageHeap struct {
 	interf *imageHeapInterface
 	bound  int
 }
 
+// NewImageHeap returns a new image heap with a given bound. If bound ≥ 0 it
+// is used as the upper limit of entries stored in the heap. That is only
+// the bound smallest images are stored.
 func NewImageHeap(bound int) *ImageHeap {
 	interf := newImageHeapInterface(bound)
 	return &ImageHeap{interf, bound}
 }
 
+// AddEntry adds a new entry to the heap, truncating the heap if bounds is ≥ 0.
 func (h *ImageHeap) AddEntry(entry ImageHeapEntry) {
 	heap.Push(h.interf, entry)
 	switch {
@@ -84,15 +94,15 @@ func (h *ImageHeap) AddEntry(entry ImageHeapEntry) {
 	}
 }
 
+// Add is a shortcut for AddEntry.
 func (h *ImageHeap) Add(image ImageID, metricValue float64) {
 	h.AddEntry(NewImageHeapEntry(image, metricValue))
 }
 
-// func (h *ImageHeap) Pop() ImageHeapEntry {
-// 	x := heap.Pop(h.interf)
-// 	return x.(ImageHeapEntry)
-// }
-
+// GetView returns the sorted collection of entries in the heap, that is images
+// with smallest values first. The length of the result slice is between 0
+// and bounds.
+// The complexity is O(n * log(n)) where n is the size of the heap.
 func (h *ImageHeap) GetView() []ImageHeapEntry {
 	n := h.interf.Len()
 	tmp := make(imageHeapInterface, n)
