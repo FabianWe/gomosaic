@@ -176,3 +176,22 @@ func KeepRatioWidth(originalWidth, originalHeight, height int) int {
 	ratio := float64(originalWidth) / float64(originalHeight)
 	return int(ratio * float64(height))
 }
+
+func ParsePercent(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	suffix := `%`
+	if strings.HasSuffix(s, suffix) {
+		s = s[:len(s)-len(suffix)]
+		s = strings.TrimSpace(s)
+		asFloat, floatErr := strconv.ParseFloat(s, 64)
+		if floatErr != nil {
+			return 0.0, floatErr
+		}
+		return asFloat / 100.0, nil
+	}
+	asFloat, floatErr := strconv.ParseFloat(s, 64)
+	if floatErr != nil {
+		return 0.0, floatErr
+	}
+	return asFloat, nil
+}

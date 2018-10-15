@@ -18,6 +18,8 @@ import (
 	"image"
 	"math/rand"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func computeSingleHeap(storage ImageStorage, metric ImageMetric, i, j int, target *ImageHeap) error {
@@ -26,7 +28,13 @@ func computeSingleHeap(storage ImageStorage, metric ImageMetric, i, j int, targe
 	for ; imageID < numImages; imageID++ {
 		dist, distErr := metric.Compare(storage, imageID, i, j)
 		if distErr != nil {
-			return distErr
+			log.WithFields(log.Fields{
+				log.ErrorKey: distErr,
+				"image":      imageID,
+				"tileY":      i,
+				"tileX":      j,
+			}).Error("Can't compute metric value, ignoreing it")
+			continue
 		}
 		target.Add(imageID, dist)
 	}
@@ -35,8 +43,7 @@ func computeSingleHeap(storage ImageStorage, metric ImageMetric, i, j int, targe
 
 // TODO doc that it does not call InitTiles
 func ComputeHeaps(storage ImageStorage, metric ImageMetric, query image.Image, dist TileDivision,
-	k, numRoutines int) ([][]*ImageHeap, error) {
-
+	k, numRoutines int, progress ProgressFunc) ([][]*ImageHeap, error) {
 	// concurrently compute heaps
 	// first, create all heapss
 	heaps := make([][]*ImageHeap, len(dist))
@@ -77,14 +84,20 @@ func ComputeHeaps(storage ImageStorage, metric ImageMetric, query image.Image, d
 				jobs <- job{i, j}
 			}
 		}
+		close(jobs)
 	}()
 
 	// wait until done
+	numDone := 0
 	for _, col := range dist {
 		for j := 0; j < len(col); j++ {
 			nextErr := <-errors
 			if nextErr != nil && err == nil {
 				err = nextErr
+			}
+			numDone++
+			if progress != nil {
+				progress(numDone)
 			}
 		}
 	}
@@ -143,7 +156,8 @@ func (sel *HeapImageSelector) SelectImages(storage ImageStorage,
 	}
 
 	// compute heaps
-	heaps, heapsErr := ComputeHeaps(storage, sel.Metric, query, dist, sel.K, sel.NumRoutines)
+	heaps, heapsErr := ComputeHeaps(storage, sel.Metric, query, dist, sel.K,
+		sel.NumRoutines, progress)
 	if heapsErr != nil {
 		return nil, heapsErr
 	}

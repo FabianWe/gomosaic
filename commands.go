@@ -147,6 +147,10 @@ type ExecutorState struct {
 	// VarietySelector is the current variety selector, defaults to
 	// cmdVarietyNone.
 	VarietySelector cmdVarietySelector
+
+	// BestFit is the percent value (between 0 and 1) that describes how much
+	// percent of the input images are considered in the variety heaps.
+	BestFit float64
 }
 
 // GetPath returns the absolute path given some other path.
@@ -179,6 +183,15 @@ func (state *ExecutorState) GetPath(path string) (string, error) {
 		return "", pathErr
 	}
 	return res, nil
+}
+
+// GetBestFitImages multiplies that best fit factor (BestFit) with num images
+// to get the number of best fit images for the variety selectors. It sets
+// same sane defaults in the case something weird happens.
+func (state *ExecutorState) GetBestFitImages(numImages int) int {
+	asFloat := float64(numImages) * state.BestFit
+	asInt := int(asFloat)
+	return IntMin(IntMax(asInt, 1), numImages)
 }
 
 // CommandFunc is a function that is applied to the current states and
@@ -439,6 +452,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 		"interp":       InterPString(state.InterP),
 		"cache":        state.CacheSize,
 		"variety":      state.VarietySelector.displayString(),
+		"best":         fmt.Sprintf("%.2f %%", 100.0*state.BestFit),
 	}
 	if len(args) == 1 {
 		// print specific value
@@ -528,6 +542,13 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 			return fmt.Errorf("Invalid value for variety, must be \"None\" or \"Random\", got: \"%s\"", valueStr)
 		}
 		state.VarietySelector = val
+		return nil
+	case "best":
+		val, parseErr := ParsePercent(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for best, must be a percent (50.0%% or 0.5), got %s", valueStr)
+		}
+		state.BestFit = val
 		return nil
 	default:
 		return fmt.Errorf("Invalid variable \"%s\". For a list use \"stats\"", name)
@@ -1032,8 +1053,16 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			if metricErr != nil {
 				return metricErr
 			}
-
-			selector = GCHSelector(state.GCHStorage, metric, state.NumRoutines)
+			switch state.VarietySelector {
+			case cmdVarietyNone:
+				selector = GCHSelector(state.GCHStorage, metric, state.NumRoutines)
+			case cmdVarietyRand:
+				imageMetric := NewHistogramImageMetric(state.GCHStorage, metric, state.NumRoutines)
+				numBestFit := state.GetBestFitImages(int(state.ImgStorage.NumImages()))
+				selector = RandomHeapImageSelector(imageMetric, numBestFit, state.NumRoutines)
+			default:
+				return fmt.Errorf("Internal error, please report bug: Got unkown variety selector (GCH): %d", state.VarietySelector)
+			}
 		} else {
 			metric, metricErr := parseLCHMetric(selectionStr)
 			if metricErr != nil {
@@ -1052,7 +1081,16 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 				// should never happen
 				return fmt.Errorf("Invalid scheme with %d parts. This is a bug! Pleas report", state.LCHStorage.SchemeSize())
 			}
-			selector = LCHSelector(state.LCHStorage, scheme, metric, state.NumRoutines)
+			switch state.VarietySelector {
+			case cmdVarietyNone:
+				selector = LCHSelector(state.LCHStorage, scheme, metric, state.NumRoutines)
+			case cmdVarietyRand:
+				imageMetric := NewLCHImageMetric(state.LCHStorage, scheme, metric, state.NumRoutines)
+				numBestFit := state.GetBestFitImages(int(state.ImgStorage.NumImages()))
+				selector = RandomHeapImageSelector(imageMetric, numBestFit, state.NumRoutines)
+			default:
+				return fmt.Errorf("Internal error, please report bug: Got unkown variety selector (LCH): %d", state.VarietySelector)
+			}
 		}
 		if state.Verbose {
 			fmt.Fprintln(state.Out)
@@ -1216,6 +1254,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		InterP:          resize.Lanczos3,
 		CacheSize:       ImageCacheSize,
 		VarietySelector: cmdVarietyNone,
+		BestFit:         0.05,
 	}
 }
 
@@ -1301,6 +1340,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		InterP:          resize.Lanczos3,
 		CacheSize:       ImageCacheSize,
 		VarietySelector: cmdVarietyNone,
+		BestFit:         0.05,
 	}
 }
 

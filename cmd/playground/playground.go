@@ -147,7 +147,8 @@ func main() {
 	}
 	fmt.Println("Composing with random")
 	var sel gomosaic.ImageSelector
-	sel = gomosaic.RandomHeapImageSelector(gomosaic.NewHistogramImageMetric(histStorage, hMetric, 8), 2, 8)
+	sel = gomosaic.RandomHeapImageSelector(gomosaic.NewHistogramImageMetric(histStorage, hMetric, 8),
+		2, 8)
 	if initErr := sel.Init(storage); initErr != nil {
 		log.Fatal(initErr)
 	}
