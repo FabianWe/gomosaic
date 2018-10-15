@@ -34,7 +34,8 @@ func usage() {
 	prefix := "Usage " + os.Args[0]
 	prefixLength := utf8.RuneCountInString(prefix)
 	prefixReplace := strings.Repeat(" ", prefixLength)
-	fmt.Println(prefix, "[--version | -v] [--help | -h] [--repl] [--run <path> [params...]] [--execute <command> [params...]] ")
+	fmt.Println(prefix, "[--version | -v] [--help | -h] [--copyright] [--repl] [--run <path> [params...]]")
+	fmt.Println(prefixReplace, "[--execute <command> [params...]]")
 	fmt.Println(prefixReplace, "[simple <db-path> <input> <output> <tilesX x tilesY> [width x height]]")
 	fmt.Println(prefixReplace, "[metric <db-path> <input> <output> <tilesX x tilesY> <metric>]")
 	fmt.Println(prefixReplace, "[compare <db-path> <input> <output-dir> <tilesX x tilesY>]")
@@ -47,7 +48,9 @@ func usage() {
 		description []string
 	}
 	descriptions := []cmdDesc{
-		cmdDesc{"--version", []string{"Show version"}},
+		cmdDesc{"--help", []string{"Show this message and exit"}},
+		cmdDesc{"--version", []string{"Show version and exit"}},
+		cmdDesc{"--copyright", []string{"Show copyright information and exit"}},
 		cmdDesc{"--repl", []string{"Run interactive mode (Read–Eval–Print Loop)"}},
 		cmdDesc{"--run", []string{
 			"Run commands in the specified mosaic script file. Additional arguments",
@@ -110,6 +113,9 @@ func main() {
 		usage()
 	case "--version", "-v":
 		fmt.Println("gomsaic version", gomosaic.Version)
+	case "--copyright":
+		// hack, but fine
+		copyrightCommand(nil)
 	case "--repl":
 		repl()
 	case "--execute":
@@ -283,21 +289,21 @@ func helpCommand(state *gomosaic.ExecutorState, args ...string) error {
 }
 
 func copyrightCommand(state *gomosaic.ExecutorState, args ...string) error {
-	license := `Copyright 2018 Fabian Wenzelmann
+	license := `  Copyright 2018 Fabian Wenzelmann
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
 
-http://www.apache.org/licenses/LICENSE-2.0
+  http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
 
-For more details and third-party licenses see <https://github.com/FabianWe/gomosaic>`
+  For more details and third-party licenses see <https://github.com/FabianWe/gomosaic>`
 	fmt.Println(license)
 	return nil
 }
