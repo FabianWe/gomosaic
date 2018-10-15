@@ -40,6 +40,35 @@ var (
 	ErrCmdSyntaxErr = errors.New("Invalid command syntax")
 )
 
+type cmdVarietySelector int
+
+const (
+	cmdVarietyNone cmdVarietySelector = iota
+	cmdVarietyRand
+)
+
+func (s cmdVarietySelector) displayString() string {
+	switch s {
+	case cmdVarietyNone:
+		return "None"
+	case cmdVarietyRand:
+		return "Random"
+	default:
+		return "Unkown"
+	}
+}
+
+func parseCMDVarietySelector(s string) (cmdVarietySelector, error) {
+	switch strings.ToLower(s) {
+	case "none":
+		return cmdVarietyNone, nil
+	case "random":
+		return cmdVarietyRand, nil
+	default:
+		return -1, fmt.Errorf("Unkown variety type: %s", s)
+	}
+}
+
 // TODO this state is rather specific for a file system version,
 // maybe some more interfaces will help generalizing?
 // But this is stuff for the future when more than images / histograms as
@@ -114,6 +143,10 @@ type ExecutorState struct {
 	// it also increases memory consumption. If cache size is < 0 the
 	// DefaultCacheSize is used.
 	CacheSize int
+
+	// VarietySelector is the current variety selector, defaults to
+	// cmdVarietyNone.
+	VarietySelector cmdVarietySelector
 }
 
 // GetPath returns the absolute path given some other path.
@@ -405,6 +438,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 		"jpeg-quality": state.JPGQuality,
 		"interp":       InterPString(state.InterP),
 		"cache":        state.CacheSize,
+		"variety":      state.VarietySelector.displayString(),
 	}
 	if len(args) == 1 {
 		// print specific value
@@ -487,6 +521,13 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 			return fmt.Errorf("Invalid value for cache size, must be an integer: %d", val)
 		}
 		state.CacheSize = val
+		return nil
+	case "variety":
+		val, parseErr := parseCMDVarietySelector(valueStr)
+		if parseErr != nil {
+			return fmt.Errorf("Invalid value for variety, must be \"None\" or \"Random\", got: \"%s\"", valueStr)
+		}
+		state.VarietySelector = val
 		return nil
 	default:
 		return fmt.Errorf("Invalid variable \"%s\". For a list use \"stats\"", name)
@@ -991,6 +1032,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			if metricErr != nil {
 				return metricErr
 			}
+
 			selector = GCHSelector(state.GCHStorage, metric, state.NumRoutines)
 		} else {
 			metric, metricErr := parseLCHMetric(selectionStr)
@@ -1160,19 +1202,20 @@ func (h ReplHandler) Init() *ExecutorState {
 	mapper := NewFSMapper()
 	return &ExecutorState{
 		// dir is always an absolute path
-		WorkingDir:  dir,
-		NumRoutines: initialRoutines,
-		Mapper:      mapper,
-		ImgStorage:  NewFSImageDB(mapper),
-		GCHStorage:  nil,
-		LCHStorage:  nil,
-		Verbose:     true,
-		In:          os.Stdin,
-		Out:         os.Stdout,
-		CutMosaic:   false,
-		JPGQuality:  100,
-		InterP:      resize.Lanczos3,
-		CacheSize:   ImageCacheSize,
+		WorkingDir:      dir,
+		NumRoutines:     initialRoutines,
+		Mapper:          mapper,
+		ImgStorage:      NewFSImageDB(mapper),
+		GCHStorage:      nil,
+		LCHStorage:      nil,
+		Verbose:         true,
+		In:              os.Stdin,
+		Out:             os.Stdout,
+		CutMosaic:       false,
+		JPGQuality:      100,
+		InterP:          resize.Lanczos3,
+		CacheSize:       ImageCacheSize,
+		VarietySelector: cmdVarietyNone,
 	}
 }
 
@@ -1244,19 +1287,20 @@ func (h ScriptHandler) Init() *ExecutorState {
 	mapper := NewFSMapper()
 	return &ExecutorState{
 		// dir is always an absolute path
-		WorkingDir:  dir,
-		NumRoutines: initialRoutines,
-		Mapper:      mapper,
-		ImgStorage:  NewFSImageDB(mapper),
-		GCHStorage:  nil,
-		LCHStorage:  nil,
-		Verbose:     true,
-		In:          h.Source,
-		Out:         os.Stdout,
-		CutMosaic:   false,
-		JPGQuality:  100,
-		InterP:      resize.Lanczos3,
-		CacheSize:   ImageCacheSize,
+		WorkingDir:      dir,
+		NumRoutines:     initialRoutines,
+		Mapper:          mapper,
+		ImgStorage:      NewFSImageDB(mapper),
+		GCHStorage:      nil,
+		LCHStorage:      nil,
+		Verbose:         true,
+		In:              h.Source,
+		Out:             os.Stdout,
+		CutMosaic:       false,
+		JPGQuality:      100,
+		InterP:          resize.Lanczos3,
+		CacheSize:       ImageCacheSize,
+		VarietySelector: cmdVarietyNone,
 	}
 }
 
