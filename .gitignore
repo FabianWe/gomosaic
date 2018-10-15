@@ -3,6 +3,12 @@
 /histogram
 /playground
 
+# compiled stuff in compiled directory
+compiled/*
+
+# exception for gitkeep so we're able to add the directory
+!compiled/.gitkeep
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
