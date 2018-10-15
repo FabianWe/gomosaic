@@ -76,7 +76,7 @@ type ImageMetric interface {
 // called for each tile of the image.
 func InitTilesHelper(storage ImageStorage, query image.Image, dist TileDivision,
 	numRoutines int,
-	init func(tiles [][]image.Image) error,
+	init func(tiles Tiles) error,
 	onTile func(i, j int, tileImage image.Image) error) error {
 	tiles, tilesErr := DivideImage(query, dist, numRoutines)
 	if tilesErr != nil {
@@ -296,7 +296,7 @@ func (m *HistogramImageMetric) InitStorage(storage ImageStorage) error {
 // InitTiles concurrently computes the histograms of the tiles of the query
 // image.
 func (m *HistogramImageMetric) InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error {
-	init := func(tiles [][]image.Image) error {
+	init := func(tiles Tiles) error {
 		m.TileData = make([][]*Histogram, len(tiles))
 		for i, col := range tiles {
 			size := len(col)
@@ -365,7 +365,7 @@ func (m LCHImageMetric) InitStorage(storage ImageStorage) error {
 // InitTiles concurrently computes the LCHs of the tiles of the query
 // image.
 func (m *LCHImageMetric) InitTiles(storage ImageStorage, query image.Image, dist TileDivision) error {
-	init := func(tiles [][]image.Image) error {
+	init := func(tiles Tiles) error {
 		m.TileData = make([][]*LCH, len(tiles))
 		for i, col := range tiles {
 			size := len(col)
