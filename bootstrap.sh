@@ -3,7 +3,7 @@
 VERSION="1.1-beta"
 
 LINUX="linux"
-LINUX_ARCH=("amd64" "arm" "arm64")
+LINUX_ARCH=("amd64" "arm" "arm64" "386")
 
 WINDOWS="windows"
 WINDOWS_ARCH=("386" "amd64")
