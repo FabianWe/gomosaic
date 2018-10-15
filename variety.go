@@ -41,7 +41,10 @@ func computeSingleHeap(storage ImageStorage, metric ImageMetric, i, j int, targe
 	return nil
 }
 
-// TODO doc that it does not call InitTiles
+// ComputeHeaps computes the image heap for each tile given k (the number of
+// images to store in each heap).
+//
+// Metric will not be initialized, that must happen before.
 func ComputeHeaps(storage ImageStorage, metric ImageMetric, query image.Image, dist TileDivision,
 	k, numRoutines int, progress ProgressFunc) ([][]*ImageHeap, error) {
 	// concurrently compute heaps
@@ -108,10 +111,15 @@ func ComputeHeaps(storage ImageStorage, metric ImageMetric, query image.Image, d
 	return heaps, nil
 }
 
+// HeapSelector is used to select the actual images after creating the image
+// heaps.
 type HeapSelector interface {
 	Select(storage ImageStorage, query image.Image, dist TileDivision, heaps [][]*ImageHeap) ([][]ImageID, error)
 }
 
+// GenHeapViews can be used to transform the image heaps into the actual list
+// of images in that heap.
+// It's only a shortcut calling GetView on each heap.
 func GenHeapViews(heaps [][]*ImageHeap) [][][]ImageHeapEntry {
 	res := make([][][]ImageHeapEntry, len(heaps))
 	for i, col := range heaps {
@@ -126,6 +134,9 @@ func GenHeapViews(heaps [][]*ImageHeap) [][][]ImageHeapEntry {
 	return res
 }
 
+// HeapImageSelector implements ImageSelector. It first computes the image
+// heaps given the metric and then uses the provided HeapSelector to select
+// the actual images from the heaps.
 type HeapImageSelector struct {
 	Metric      ImageMetric
 	Selector    HeapSelector
@@ -133,6 +144,13 @@ type HeapImageSelector struct {
 	NumRoutines int
 }
 
+// NewHeapImageSelector returns a new selector.
+// Metric is the image metric that is used for the image heaps, selector is
+// used to select the actual images from the heaps. k is the number of images
+// stored in each image heap (that is the k best images are stored in the
+// heaps).
+// NumRoutines is the number of things that happen concurrently (not exactly,
+// but guidance level),
 func NewHeapImageSelector(metric ImageMetric, selector HeapSelector, k, numRoutines int) *HeapImageSelector {
 	if numRoutines <= 0 {
 		numRoutines = 1
@@ -145,10 +163,13 @@ func NewHeapImageSelector(metric ImageMetric, selector HeapSelector, k, numRouti
 	}
 }
 
+// Init just calls InitStorage on the provided image metric.
 func (sel *HeapImageSelector) Init(storage ImageStorage) error {
 	return sel.Metric.InitStorage(storage)
 }
 
+// SelectImages first calls InitTiles on the provided metric, then computes
+// the heaps and applies the selector on the heaps.
 func (sel *HeapImageSelector) SelectImages(storage ImageStorage,
 	query image.Image, dist TileDivision, progress ProgressFunc) ([][]ImageID, error) {
 	if initErr := sel.Metric.InitTiles(storage, query, dist); initErr != nil {
@@ -166,12 +187,21 @@ func (sel *HeapImageSelector) SelectImages(storage ImageStorage,
 	return sel.Selector.Select(storage, query, dist, heaps)
 }
 
+// RandomHeapSelector implements HeapSelector by using just a random element
+// from each heap.
+//
+// Note that instances of this selector are not safe for concurrent use.
 type RandomHeapSelector struct {
 	randGen *rand.Rand
 }
 
-// TODO not safe for concurrent use
-
+// NewRandomHeapSelector returns a new random selector.
+// The provided random generator is used to generate random numbers. You can
+// use nil and a random generator will be created.
+//
+// Note that rand.Rand instances are not safe for concurrent use.
+// Thus using the same generator on two instances that run concurrently is
+// not allowed.
 func NewRandomHeapSelector(randGen *rand.Rand) *RandomHeapSelector {
 	if randGen == nil {
 		seed := time.Now().UnixNano()
@@ -180,6 +210,7 @@ func NewRandomHeapSelector(randGen *rand.Rand) *RandomHeapSelector {
 	return &RandomHeapSelector{randGen}
 }
 
+// Select implements the HeapSelector interface, it selects the random images.
 func (sel *RandomHeapSelector) Select(storage ImageStorage, query image.Image, dist TileDivision, heaps [][]*ImageHeap) ([][]ImageID, error) {
 	res := make([][]ImageID, len(dist))
 
@@ -206,6 +237,8 @@ func (sel *RandomHeapSelector) Select(storage ImageStorage, query image.Image, d
 	return res, nil
 }
 
+// RandomHeapImageSelector returns a HeapImageSelector using a random selection.
+// Thus it can be used as an ImageSelector.
 func RandomHeapImageSelector(metric ImageMetric, k, numRoutines int) *HeapImageSelector {
 	heapSel := NewRandomHeapSelector(nil)
 	return NewHeapImageSelector(metric, heapSel, k, numRoutines)

@@ -30,7 +30,8 @@ func NewImageHeapEntry(image ImageID, value float64) ImageHeapEntry {
 	return ImageHeapEntry{image, value}
 }
 
-// imageHeapInterface is an internal type that implements heap.Interface
+// imageHeapInterface is an internal type that implements heap.Interface.
+// We actually hide the implementation details and just allow Add operations.
 type imageHeapInterface []ImageHeapEntry
 
 func newImageHeapInterface(bound int) *imageHeapInterface {
