@@ -15,17 +15,18 @@
 package main
 
 import (
-	"fmt"
+	"time"
 
 	"github.com/FabianWe/gomosaic/web"
 )
 
 func main() {
 	memStorage := web.NewMemStorage()
-	uuid1, _ := web.GenConnectionID()
-	uuid2, _ := web.GenConnectionID()
-	memStorage.Set(uuid1, new(web.State))
-
-	fmt.Println(memStorage.Get(uuid1))
-	fmt.Println(memStorage.Get(uuid2))
+	context := web.NewContext(memStorage)
+	id, _ := web.GenConnectionID()
+	context.Connections.Set(id, web.NewState())
+	done := context.Connections.RunFilter(3*time.Second, time.Second)
+	time.Sleep(10 * time.Second)
+	close(done)
+	time.Sleep(2 * time.Second)
 }

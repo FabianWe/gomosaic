@@ -37,9 +37,10 @@ const (
 )
 
 type Context struct {
-	Storage     ConnectionStorage
+	Connections *ConnectionHandler
 	NumRoutines int
 	CacheSize   int
+	Verbose     bool
 }
 
 func NewContext(storage ConnectionStorage) *Context {
@@ -48,8 +49,9 @@ func NewContext(storage ConnectionStorage) *Context {
 		// don't know if this can happen, better safe than sorry
 		initialRoutines = 4
 	}
+	handler := ConnectionHandler{storage}
 	return &Context{
-		Storage:     storage,
+		Connections: &handler,
 		NumRoutines: initialRoutines,
 		CacheSize:   gomosaic.ImageCacheSize,
 	}
@@ -176,7 +178,7 @@ func StateHandlerToHTTPFunc(context *Context, handler StateHandlerFunc) http.Han
 			return nil, ErrAlreadyHandled
 		}
 		// get connection from context
-		state, connErr := context.Storage.Get(connectionID)
+		state, connErr := context.Connections.Get(connectionID)
 		if connErr != nil {
 			http.Error(w, connErr.Error(), 400)
 			return nil, ErrAlreadyHandled
@@ -194,6 +196,23 @@ func InitHandler(context *Context, w http.ResponseWriter, r *http.Request) (inte
 	res := map[string]string{
 		"connection": uuid.String(),
 	}
+	return res, nil
+}
+
+func StopHandler(state *State, context *Context, w http.ResponseWriter, jsonMap JSONMap) (interface{}, error) {
+	// remove connection
+	conn := state.Connection
+	// just to be sure
+	if conn == NoConnectionID {
+		err := fmt.Errorf("Invalid connection id %s", conn.String())
+		log.WithError(err).Error("Can't remove connection")
+		return nil, err
+	}
+	removeErr := context.Connections.Delete(conn)
+	if removeErr != nil {
+		return nil, removeErr
+	}
+	res := map[string]bool{"success": true}
 	return res, nil
 }
 

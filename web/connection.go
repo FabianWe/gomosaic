@@ -16,6 +16,8 @@ package web
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -35,7 +37,12 @@ func (id ConnectionID) String() string {
 	return uuid.UUID(id).String()
 }
 
+var (
+	NoConnectionID = ConnectionID(uuid.UUID{})
+)
+
 type State struct {
+	Connection     ConnectionID
 	created        time.Time
 	lastConnection time.Time
 	storage        gomosaic.ImageStorage
@@ -52,6 +59,7 @@ func NewState() *State {
 	now := time.Now().UTC()
 
 	return &State{
+		Connection:     NoConnectionID,
 		created:        now,
 		lastConnection: now,
 		storage:        nil,
@@ -79,6 +87,49 @@ type ConnectionStorage interface {
 	Set(conn ConnectionID, state *State) error
 	Delete(conn ConnectionID) error
 	Filter(maxAge time.Duration) error
+}
+
+type ConnectionHandler struct {
+	Storage ConnectionStorage
+}
+
+func (h *ConnectionHandler) Get(conn ConnectionID) (*State, error) {
+	now := time.Now().UTC()
+	state, stateErr := h.Storage.Get(conn)
+	if stateErr != nil {
+		return nil, stateErr
+	}
+	state.lastConnection = now
+	return state, nil
+}
+
+func (h *ConnectionHandler) Set(conn ConnectionID, state *State) error {
+	state.Connection = conn
+	return h.Storage.Set(conn, state)
+}
+
+func (h *ConnectionHandler) Delete(conn ConnectionID) error {
+	return h.Storage.Delete(conn)
+}
+
+func (h *ConnectionHandler) RunFilter(maxAge, interval time.Duration) chan<- struct{} {
+	ticker := time.NewTicker(interval)
+	done := make(chan struct{})
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				log.Println("Filter runner shutting done")
+				return
+			case <-ticker.C:
+				log.Println("Filtering out old connections")
+				h.Storage.Filter(maxAge)
+				fmt.Println(h.Storage)
+			}
+		}
+	}()
+	return done
 }
 
 type MemStorage struct {
