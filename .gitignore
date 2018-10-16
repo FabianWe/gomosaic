@@ -2,6 +2,7 @@
 /mosaic
 /histogram
 /playground
+/backend
 
 # compiled stuff in compiled directory
 compiled/*

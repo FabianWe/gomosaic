@@ -178,6 +178,28 @@ func InterPString(interP resize.InterpolationFunction) string {
 	}
 }
 
+// InterPFromString parses s as an interpreation function, valid values include:
+// "nearest-neighbor", "bilinear", "bicubic", "mitchell-netravali", "lanczos2"
+// and "lanczos3".
+func InterPFromString(s string) (resize.InterpolationFunction, error) {
+	switch strings.ToLower(s) {
+	case "nearestneighbor", "nearest-neighbor":
+		return resize.NearestNeighbor, nil
+	case "bilinear":
+		return resize.Bilinear, nil
+	case "bicubic":
+		return resize.Bicubic, nil
+	case "mitchellnetravali", "mitchell-netravali":
+		return resize.MitchellNetravali, nil
+	case "lanczos2":
+		return resize.Lanczos2, nil
+	case "lanczos3":
+		return resize.Lanczos3, nil
+	default:
+		return resize.InterpolationFunction(-1), fmt.Errorf("Invalid interpolation name: %s", s)
+	}
+}
+
 var (
 	// DefaultResizer is the resizer that is used by default, if you're
 	// looking for a resizer default argument this seems useful.

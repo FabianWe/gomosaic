@@ -26,7 +26,7 @@ import (
 const (
 	// Debug is true if code should be compiled in debug mode, printing
 	// more stuff and performing checks.
-	Debug = false
+	Debug = true
 
 	// Version is the version of gomosaic.
 	Version = "1.1"

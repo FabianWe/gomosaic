@@ -40,30 +40,30 @@ var (
 	ErrCmdSyntaxErr = errors.New("Invalid command syntax")
 )
 
-type cmdVarietySelector int
+type CmdVarietySelector int
 
 const (
-	cmdVarietyNone cmdVarietySelector = iota
-	cmdVarietyRand
+	CmdVarietyNone CmdVarietySelector = iota
+	CmdVarietyRand
 )
 
-func (s cmdVarietySelector) displayString() string {
+func (s CmdVarietySelector) DisplayString() string {
 	switch s {
-	case cmdVarietyNone:
+	case CmdVarietyNone:
 		return "None"
-	case cmdVarietyRand:
+	case CmdVarietyRand:
 		return "Random"
 	default:
 		return "Unkown"
 	}
 }
 
-func parseCMDVarietySelector(s string) (cmdVarietySelector, error) {
+func ParseCMDVarietySelector(s string) (CmdVarietySelector, error) {
 	switch strings.ToLower(s) {
 	case "none":
-		return cmdVarietyNone, nil
+		return CmdVarietyNone, nil
 	case "random":
-		return cmdVarietyRand, nil
+		return CmdVarietyRand, nil
 	default:
 		return -1, fmt.Errorf("Unkown variety type: %s", s)
 	}
@@ -146,7 +146,7 @@ type ExecutorState struct {
 
 	// VarietySelector is the current variety selector, defaults to
 	// cmdVarietyNone.
-	VarietySelector cmdVarietySelector
+	VarietySelector CmdVarietySelector
 
 	// BestFit is the percent value (between 0 and 1) that describes how much
 	// percent of the input images are considered in the variety heaps.
@@ -451,7 +451,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 		"jpeg-quality": state.JPGQuality,
 		"interp":       InterPString(state.InterP),
 		"cache":        state.CacheSize,
-		"variety":      state.VarietySelector.displayString(),
+		"variety":      state.VarietySelector.DisplayString(),
 		"best":         fmt.Sprintf("%.2f %%", 100.0*state.BestFit),
 	}
 	if len(args) == 1 {
@@ -537,7 +537,7 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 		state.CacheSize = val
 		return nil
 	case "variety":
-		val, parseErr := parseCMDVarietySelector(valueStr)
+		val, parseErr := ParseCMDVarietySelector(valueStr)
 		if parseErr != nil {
 			return fmt.Errorf("Invalid value for variety, must be \"None\" or \"Random\", got: \"%s\"", valueStr)
 		}
@@ -1054,9 +1054,9 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 				return metricErr
 			}
 			switch state.VarietySelector {
-			case cmdVarietyNone:
+			case CmdVarietyNone:
 				selector = GCHSelector(state.GCHStorage, metric, state.NumRoutines)
-			case cmdVarietyRand:
+			case CmdVarietyRand:
 				imageMetric := NewHistogramImageMetric(state.GCHStorage, metric, state.NumRoutines)
 				numBestFit := state.GetBestFitImages(int(state.ImgStorage.NumImages()))
 				selector = RandomHeapImageSelector(imageMetric, numBestFit, state.NumRoutines)
@@ -1082,9 +1082,9 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 				return fmt.Errorf("Invalid scheme with %d parts. This is a bug! Pleas report", state.LCHStorage.SchemeSize())
 			}
 			switch state.VarietySelector {
-			case cmdVarietyNone:
+			case CmdVarietyNone:
 				selector = LCHSelector(state.LCHStorage, scheme, metric, state.NumRoutines)
-			case cmdVarietyRand:
+			case CmdVarietyRand:
 				imageMetric := NewLCHImageMetric(state.LCHStorage, scheme, metric, state.NumRoutines)
 				numBestFit := state.GetBestFitImages(int(state.ImgStorage.NumImages()))
 				selector = RandomHeapImageSelector(imageMetric, numBestFit, state.NumRoutines)
@@ -1230,7 +1230,7 @@ func (h ReplHandler) Init() *ExecutorState {
 	// seems reasonable
 	initialRoutines := runtime.NumCPU() * 2
 	if initialRoutines <= 0 {
-		// don't know if this can happen, better safe then sorry
+		// don't know if this can happen, better safe than sorry
 		initialRoutines = 4
 	}
 	dir, err := filepath.Abs(".")
@@ -1253,7 +1253,7 @@ func (h ReplHandler) Init() *ExecutorState {
 		JPGQuality:      100,
 		InterP:          resize.Lanczos3,
 		CacheSize:       ImageCacheSize,
-		VarietySelector: cmdVarietyNone,
+		VarietySelector: CmdVarietyNone,
 		BestFit:         0.05,
 	}
 }
@@ -1339,7 +1339,7 @@ func (h ScriptHandler) Init() *ExecutorState {
 		JPGQuality:      100,
 		InterP:          resize.Lanczos3,
 		CacheSize:       ImageCacheSize,
-		VarietySelector: cmdVarietyNone,
+		VarietySelector: CmdVarietyNone,
 		BestFit:         0.05,
 	}
 }
