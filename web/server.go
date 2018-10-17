@@ -160,7 +160,6 @@ func ProcessRequest(w http.ResponseWriter, r *http.Request) (JSONMap, error) {
 	return m, nil
 }
 
-// TODO change layout to be more clear...
 type StateHandlerFunc func(state *State, context *Context, w http.ResponseWriter, jsonMap JSONMap) (interface{}, error)
 
 func StateHandlerToHTTPFunc(context *Context, handler StateHandlerFunc) http.HandlerFunc {
@@ -199,7 +198,7 @@ func InitHandler(context *Context, w http.ResponseWriter, r *http.Request) (inte
 	return res, nil
 }
 
-func StopHandler(state *State, context *Context, w http.ResponseWriter, jsonMap JSONMap) (interface{}, error) {
+func CloseHandler(state *State, context *Context, w http.ResponseWriter, jsonMap JSONMap) (interface{}, error) {
 	// remove connection
 	conn := state.Connection
 	// just to be sure
@@ -298,4 +297,14 @@ func SetVarHandler(state *State, context *Context, w http.ResponseWriter, jsonMa
 	}
 	res := map[string]bool{"success": true}
 	return res, nil
+}
+
+func DefaultHandlers(context *Context, mux *http.ServeMux) {
+	if mux == nil {
+		mux = http.DefaultServeMux
+	}
+	mux.HandleFunc("/json/v1.1/new/", ToHTTPFunc(context, InitHandler))
+	mux.HandleFunc("/json/v1.1/close/", StateHandlerToHTTPFunc(context, CloseHandler))
+	mux.HandleFunc("/json/v1.1/vars/get/", StateHandlerToHTTPFunc(context, GetVarHandler))
+	mux.HandleFunc("/json/v1.1/vars/set/", StateHandlerToHTTPFunc(context, SetVarHandler))
 }

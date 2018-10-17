@@ -41,6 +41,8 @@ var (
 	NoConnectionID = ConnectionID(uuid.UUID{})
 )
 
+// TODO state contains too much stuff, we surely need the storages but we
+// should make the rest arguments to a handler
 type State struct {
 	Connection     ConnectionID
 	created        time.Time
