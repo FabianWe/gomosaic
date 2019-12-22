@@ -45,6 +45,7 @@ type CmdVarietySelector int
 const (
 	CmdVarietyNone CmdVarietySelector = iota
 	CmdVarietyRand
+	CmdVarietyMetric
 )
 
 func (s CmdVarietySelector) DisplayString() string {
@@ -53,6 +54,8 @@ func (s CmdVarietySelector) DisplayString() string {
 		return "None"
 	case CmdVarietyRand:
 		return "Random"
+	case CmdVarietyMetric:
+		return "Metric"
 	default:
 		return "Unknown"
 	}
@@ -64,6 +67,8 @@ func ParseCMDVarietySelector(s string) (CmdVarietySelector, error) {
 		return CmdVarietyNone, nil
 	case "random":
 		return CmdVarietyRand, nil
+	case "metric":
+		return CmdVarietyMetric, nil
 	default:
 		return -1, fmt.Errorf("unkown variety type: %s", s)
 	}
@@ -511,20 +516,20 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 	case "jpeg-quality":
 		val, parseErr := strconv.Atoi(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for jpeg-quality (must be int between 1 and 100): %s", parseErr.Error())
+			return fmt.Errorf("invalid value for jpeg-quality (must be int between 1 and 100): %s", parseErr.Error())
 		}
 		if val < 1 || val > 100 {
-			return fmt.Errorf("Invalid value for jpeg-quality (must be int between 1 and 100): %d", val)
+			return fmt.Errorf("invalid value for jpeg-quality (must be int between 1 and 100): %d", val)
 		}
 		state.JPGQuality = val
 		return nil
 	case "interp":
 		val, parseErr := strconv.Atoi(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for interpolation function, must be integer >= 0: %s", parseErr.Error())
+			return fmt.Errorf("invalid value for interpolation function, must be integer >= 0: %s", parseErr.Error())
 		}
 		if val < 0 {
-			return fmt.Errorf("Invalid value for interpolation function, must be integer >= 0: %d", val)
+			return fmt.Errorf("invalid value for interpolation function, must be integer >= 0: %d", val)
 		}
 		interP := GetInterP(uint(val))
 		state.InterP = interP
@@ -532,26 +537,26 @@ func SetVarCommand(state *ExecutorState, args ...string) error {
 	case "cache":
 		val, parseErr := strconv.Atoi(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for cache size, must be an integer: %d", val)
+			return fmt.Errorf("invalid value for cache size, must be an integer: %d", val)
 		}
 		state.CacheSize = val
 		return nil
 	case "variety":
 		val, parseErr := ParseCMDVarietySelector(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for variety, must be \"None\" or \"Random\", got: \"%s\"", valueStr)
+			return fmt.Errorf("invalid value for variety, must be \"None\" or \"Random\", got: \"%s\"", valueStr)
 		}
 		state.VarietySelector = val
 		return nil
 	case "best":
 		val, parseErr := ParsePercent(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for best, must be a percent (50.0%% or 0.5), got %s", valueStr)
+			return fmt.Errorf("invalid value for best, must be a percent (50.0%% or 0.5), got %s", valueStr)
 		}
 		state.BestFit = val
 		return nil
 	default:
-		return fmt.Errorf("Invalid variable \"%s\". For a list use \"stats\"", name)
+		return fmt.Errorf("invalid variable \"%s\". For a list use \"stats\"", name)
 	}
 }
 
@@ -564,18 +569,18 @@ func CdCommand(state *ExecutorState, args ...string) error {
 	var expandErr error
 	path, expandErr = homedir.Expand(path)
 	if expandErr != nil {
-		return fmt.Errorf("Changing directory failed: %s", expandErr.Error())
+		return fmt.Errorf("changing directory failed: %s", expandErr.Error())
 	}
 	if fi, err := os.Lstat(path); err != nil {
-		return fmt.Errorf("Changing directory failed: %s", err.Error())
+		return fmt.Errorf("changing directory failed: %s", err.Error())
 	} else {
 		if !fi.IsDir() {
-			return fmt.Errorf("Changing directory failed: \"%s\" is not a directory", path)
+			return fmt.Errorf("changing directory failed: \"%s\" is not a directory", path)
 		} else {
 			// convert to absolute path
 			abs, absErr := filepath.Abs(path)
 			if absErr != nil {
-				return fmt.Errorf("Changing directory failed: %s", absErr.Error())
+				return fmt.Errorf("changing directory failed: %s", absErr.Error())
 			} else {
 				state.WorkingDir = abs
 				return nil
@@ -1043,7 +1048,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 			mosaicWidth, mosaicHeight = queryWidth, queryHeight
 		}
 		if mosaicWidth == 0 || mosaicHeight == 0 {
-			return fmt.Errorf("Mosaic image would be empty, dimensions %dx%d", mosaicWidth, mosaicHeight)
+			return fmt.Errorf("mosaic image would be empty, dimensions %dx%d", mosaicWidth, mosaicHeight)
 		}
 		divider := NewFixedNumDivider(tilesX, tilesY, true)
 		dist := divider.Divide(img.Bounds())
@@ -1079,7 +1084,7 @@ func MosaicCommand(state *ExecutorState, args ...string) error {
 				scheme = NewFiveLCHScheme()
 			default:
 				// should never happen
-				return fmt.Errorf("Invalid scheme with %d parts. This is a bug! Pleas report", state.LCHStorage.SchemeSize())
+				return fmt.Errorf("invalid scheme with %d parts. This is a bug! Pleas report", state.LCHStorage.SchemeSize())
 			}
 			switch state.VarietySelector {
 			case CmdVarietyNone:
