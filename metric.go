@@ -26,7 +26,7 @@ import (
 // A HistogramMetric can assume that both histograms are defined for the same k.
 // The smaller the metric value is the more equal the images are considered.
 //
-// Usually histogrm metrics operate on normalized histograms. The metric value
+// Usually histogram metrics operate on normalized histograms. The metric value
 // should be ≥ 0.
 type HistogramMetric func(hA, hB *Histogram) float64
 

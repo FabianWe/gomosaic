@@ -33,7 +33,7 @@ func computeSingleHeap(storage ImageStorage, metric ImageMetric, i, j int, targe
 				"image":      imageID,
 				"tileY":      i,
 				"tileX":      j,
-			}).Error("Can't compute metric value, ignoreing it")
+			}).Error("Can't compute metric value, ignoring it")
 			continue
 		}
 		target.Add(imageID, dist)

@@ -30,7 +30,7 @@ import (
 // no such approach is implemented at the moment.
 type ImageSelector interface {
 	// Init is called each time the storage changes and at creation.
-	// Note that in general a selector is not responsible for synching histograms
+	// Note that in general a selector is not responsible for syncing histograms
 	// with filesystem files etc. This should happen outside the storage.
 	Init(storage ImageStorage) error
 
@@ -148,12 +148,12 @@ func InitTilesHelper(storage ImageStorage, query image.Image, dist TileDivision,
 // To get the actual tiles from an image and a distribution use DivideImage.
 //
 // A note for more sophisticated storage approaches: At the moment all metric
-// storages (for example histgram storage) have all the data fastly available
+// storages (for example histogram storage) have all the data fastly available
 // in memory. This makes it easy to access an histogram.
 // Here we iterate for each tile and then over each database image. This might
 // be bad if the histograms for the database images are not loaded in memory
 // and need to be opened from a file or database. Caches won't work fine because
-// we bascially iterate all database images, process to the next tile and repeat
+// we iterate all database images, process to the next tile and repeat
 // that. Thus an alternative version should be implemented iterating over the
 // database images and then over the tiles, making it easier to cache things.
 // However this requires more communication that is not necessary at the
@@ -161,7 +161,7 @@ func InitTilesHelper(storage ImageStorage, query image.Image, dist TileDivision,
 // in memory.
 //
 // The minimizer ignores metric errors in the way that whenever Compare
-// returns an error != nil the candiate will be omitted. However a message will
+// returns an error != nil the candidate will be omitted. However a message will
 // be logged in this case.
 type ImageMetricMinimizer struct {
 	Metric      ImageMetric

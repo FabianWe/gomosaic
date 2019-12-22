@@ -18,7 +18,7 @@ import (
 	"image"
 )
 
-// AverageColor descibes the average of several RGB colors.
+// AverageColor describes the average of several RGB colors.
 type AverageColor RGB
 
 // ComputeAverageColor computes the average color of an image.

@@ -32,7 +32,7 @@ import (
 // as the histogram data.
 //
 // It also has a field checksum that is not used yet. Later it can be adjusted
-// s.t. an histgram is stored together with the checksum (e.g. just plain md5
+// s.t. an histogram is stored together with the checksum (e.g. just plain md5
 // encoded with e.g. base64) of the image the histogram was created for.
 // This way we can test if the content of an image has changed, and thus
 // the histogram became invalid. At the moment we don't recognize if an image
