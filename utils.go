@@ -195,3 +195,16 @@ func ParsePercent(s string) (float64, error) {
 	}
 	return asFloat, nil
 }
+
+// IntAbs returns the absolute value of a, that is |a| as an int.
+func IntAbs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+const MaxUint = ^uint(0)
+const MinUint = 0
+const MaxInt = int(MaxUint >> 1)
+const MinInt = -MaxInt - 1
