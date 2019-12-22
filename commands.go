@@ -37,7 +37,7 @@ import (
 var (
 	// ErrCmdSyntaxErr is returned by a CommandFunc if the syntax for the command
 	// is invalid.
-	ErrCmdSyntaxErr = errors.New("Invalid command syntax")
+	ErrCmdSyntaxErr = errors.New("invalid command syntax")
 )
 
 type CmdVarietySelector int
@@ -54,7 +54,7 @@ func (s CmdVarietySelector) DisplayString() string {
 	case CmdVarietyRand:
 		return "Random"
 	default:
-		return "Unkown"
+		return "Unknown"
 	}
 }
 
@@ -65,7 +65,7 @@ func ParseCMDVarietySelector(s string) (CmdVarietySelector, error) {
 	case "random":
 		return CmdVarietyRand, nil
 	default:
-		return -1, fmt.Errorf("Unkown variety type: %s", s)
+		return -1, fmt.Errorf("unkown variety type: %s", s)
 	}
 }
 
@@ -326,7 +326,7 @@ func isEOF(r []rune, i int) bool {
 // be enclosed in quotes, so foo "bar bar" is parsed as command foo with
 // argument bar bar (a single argument).
 func ParseCommand(s string) ([]string, error) {
-	parseErr := errors.New("Error parsing command line")
+	parseErr := errors.New("error parsing command line")
 	res := make([]string, 0)
 	// basically this is an deterministic automaton, however I can't share my
 	// "nice" image with you
@@ -459,7 +459,7 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 		if val, has := m[args[0]]; has {
 			fmt.Fprintf(state.Out, "%s ==> %v\n", args[0], val)
 		} else {
-			return fmt.Errorf("Unkown variable %s", args[0])
+			return fmt.Errorf("unkown variable %s", args[0])
 		}
 	} else {
 		// print all values
@@ -480,31 +480,31 @@ func StatsCommand(state *ExecutorState, args ...string) error {
 // SetVarCommand sets a variable to a new value.
 func SetVarCommand(state *ExecutorState, args ...string) error {
 	if len(args) != 2 {
-		return errors.New("Invalid set syntax: Requires variable and value. For a list of variables use \"stats\"")
+		return errors.New("invalid set syntax: Requires variable and value. For a list of variables use \"stats\"")
 	}
 	name, valueStr := args[0], args[1]
 	switch name {
 	case "routines":
 		val, parseErr := strconv.Atoi(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for routines (must be positive int): %s", parseErr.Error())
+			return fmt.Errorf("invalid value for routines (must be positive int): %s", parseErr.Error())
 		}
 		if val <= 0 {
-			return fmt.Errorf("Invalid value for routines (must be positive int): %d", val)
+			return fmt.Errorf("invalid value for routines (must be positive int): %d", val)
 		}
 		state.NumRoutines = val
 		return nil
 	case "verbose":
 		val, parseErr := strconv.ParseBool(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for verbose (must be true or false): %s", parseErr.Error())
+			return fmt.Errorf("invalid value for verbose (must be true or false): %s", parseErr.Error())
 		}
 		state.Verbose = val
 		return nil
 	case "cut":
 		val, parseErr := strconv.ParseBool(valueStr)
 		if parseErr != nil {
-			return fmt.Errorf("Invalid value for cut (must be true or false): %s", parseErr.Error())
+			return fmt.Errorf("invalid value for cut (must be true or false): %s", parseErr.Error())
 		}
 		state.CutMosaic = val
 		return nil

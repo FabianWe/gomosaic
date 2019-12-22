@@ -1,4 +1,4 @@
-// Copyright 2018 Fabian Wenzelmann
+// Copyright 2018 - 2019 Fabian Wenzelmann
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -289,7 +289,7 @@ func helpCommand(state *gomosaic.ExecutorState, args ...string) error {
 }
 
 func copyrightCommand(state *gomosaic.ExecutorState, args ...string) error {
-	license := `  Copyright 2018 Fabian Wenzelmann
+	license := `  Copyright 2018 - 2019 Fabian Wenzelmann
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
