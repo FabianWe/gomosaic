@@ -16,6 +16,7 @@ package gomosaic
 
 import (
 	"image"
+	"math"
 )
 
 // intManhattanDist returns the manhattan distance of two two-dimensional points
@@ -107,25 +108,47 @@ func (selector *DistanceHeapSelector) SelectImages(storage ImageStorage,
 			// get rectangle for this tile
 			rect := inner[j]
 			currentPoint := rect.Min
+
 			// now iterate over all images in the heap for this position
-			// select the image with the smallest position
+			// select the image with the maximum distance to the tile
+			// (when was the image assigned the last time?)
+			// for this we compute for each candidate the closes manhattan distance
+			// (when was the image last used close to the current point?)
 			// the assumption is that all images in the heap are considered a good candidate
+			// the one that has the highest manhattan distance is considered best (far away)
+			// so for each image we select the minimal manhattan distance to all positions
+			// this image was used
+			// then we select the one with the highest value
+			// if two images have the same manhattan distance we furthermore take the
+			// metric into account
 
 			heap := heaps[i][j]
 			view := heap.GetView()
 			maxDist := MinInt
 			bestImage := NoImageID
+			bestMetric := math.MaxFloat64
 			for _, entry := range view {
 				img := entry.Image
+				metricValue := entry.Value
 				dist := getClosestManhattan(currentPoint, currentAssignment.getAssigned(img))
-				if dist > maxDist {
+
+				switch {
+				case dist == maxDist:
+					if metricValue < bestMetric {
+						bestImage = img
+						bestMetric = metricValue
+					}
+				case dist > maxDist:
 					maxDist = dist
 					bestImage = img
+					bestMetric = metricValue
 				}
 			}
 			// assign image
-			result[i][j] = bestImage
-			currentAssignment.assignImage(bestImage, currentPoint)
+			if bestImage != NoImageID {
+				result[i][j] = bestImage
+				currentAssignment.assignImage(bestImage, currentPoint)
+			}
 		}
 	}
 	return result, nil
